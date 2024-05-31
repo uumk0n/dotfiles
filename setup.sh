@@ -10,7 +10,7 @@ echo 'eval (/opt/homebrew/bin/brew shellenv)' >>/Users/ilakonaev/.config/fish/co
 eval $(/opt/homebrew/bin/brew shellenv)
 
 # Установить необходимые пакеты через Homebrew
-brew install npm fd bat httpie nvim tmux lazygit mysql
+brew install npm fd bat httpie nvim tmux lazygit mysql ripgrep
 
 # Клонировать плагин для tmux
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm

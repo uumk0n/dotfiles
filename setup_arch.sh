@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sudo pacman -Syu --noconfirm
-sudo pacman -S --noconfirm npm fd bat httpie neovim tmux lazygit mysql ripgrep git fish
+sudo pacman -S --noconfirm kitty npm fd bat httpie neovim tmux lazygit mysql ripgrep git fish
 
 if ! grep -q "/usr/bin/fish" /etc/shells; then
   echo "/usr/bin/fish" | sudo tee -a /etc/shells

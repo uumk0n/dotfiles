@@ -6,7 +6,7 @@ echo 'eval (/opt/homebrew/bin/brew shellenv)' >>/Users/ilakonaev/.config/fish/co
 
 eval $(/opt/homebrew/bin/brew shellenv)
 
-brew install danvergara/tools/dblab fzf tree npm fd bat httpie nvim tmux lazygit mysql ripgrep
+brew install postgresql fzf tree npm fd nvim tmux lazygit ripgrep
 
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 

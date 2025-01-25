@@ -18,4 +18,6 @@ cp -r ./nvim/* ~/.config/nvim/
 
 cp .tmux.conf ~/
 
+brew install karabiner-elements --cask
+
 echo "Скрипт выполнен успешно!"

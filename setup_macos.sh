@@ -6,7 +6,10 @@ echo 'eval (/opt/homebrew/bin/brew shellenv)' >>/Users/ilakonaev/.config/fish/co
 
 eval $(/opt/homebrew/bin/brew shellenv)
 
-brew install postgresql fzf tree npm fd nvim tmux lazygit ripgrep
+brew install fish postgresql fzf tree npm fd nvim tmux lazygit ripgrep
+
+chsh -s $(which fish)
+echo $(which fish) | sudo tee -a /etc/shells
 
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
@@ -19,5 +22,6 @@ cp -r ./nvim/* ~/.config/nvim/
 cp .tmux.conf ~/
 
 brew install karabiner-elements --cask
+brew install docker --cask
 
 echo "Скрипт выполнен успешно!"

@@ -6,10 +6,7 @@ echo 'eval (/opt/homebrew/bin/brew shellenv)' >>/Users/ilakonaev/.config/fish/co
 
 eval $(/opt/homebrew/bin/brew shellenv)
 
-brew install fish postgresql fzf tree npm fd nvim tmux lazygit ripgrep
-
-chsh -s $(which fish)
-echo $(which fish) | sudo tee -a /etc/shells
+brew install postgresql fzf tree npm fd nvim tmux lazygit ripgrep
 
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 

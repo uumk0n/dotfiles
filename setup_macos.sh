@@ -1,10 +1,5 @@
 #!/bin/bash
 
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-echo 'eval (/opt/homebrew/bin/brew shellenv)' >>/Users/ilakonaev/.config/fish/config.fish
-
-eval $(/opt/homebrew/bin/brew shellenv)
 
 brew install postgresql fzf tree npm fd nvim tmux lazygit ripgrep
 

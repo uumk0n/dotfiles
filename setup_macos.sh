@@ -15,7 +15,9 @@ cp -r ./ghostty/* ~/.config/ghostty/
 
 cp .tmux.conf ~/
 
-brew install docker --cask
-brew install ghostty --cask
+brew install --cask docker
+brew install --cask ghostty
+brew install --cask firefox
+brew install --cask obsidian
 
 echo "Скрипт выполнен успешно!"

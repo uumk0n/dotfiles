@@ -11,7 +11,10 @@ rm -rf ~/.config/nvim/.git
 cp -r ./nvim/* ~/.config/nvim/
 
 mkdir ~/.config/ghostty/
+mkdir ~/.config/yazi/
+
 cp -r ./ghostty/* ~/.config/ghostty/
+cp -r ./yazi/* ~/.config/yazi/
 
 cp .tmux.conf ~/
 

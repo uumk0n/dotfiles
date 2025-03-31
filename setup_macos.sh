@@ -20,5 +20,8 @@ cp .tmux.conf ~/
 
 brew install --cask docker
 brew install --cask ghostty
+brew install --cask firefox
+brew install --cask obsidian
+brew install --cask hot
 
 echo "Скрипт выполнен успешно!"

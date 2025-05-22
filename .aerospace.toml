@@ -184,9 +184,8 @@ alt-shift-enter = 'mode apps'
 alt-t = 'exec-and-forget open -a /Applications/Telegram.app'
 alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
 alt-g = 'exec-and-forget open -a /Applications/Ghostty.app'
-alt-s = 'exec-and-forget open -a /Applications/Safari.app'
+alt-b = 'exec-and-forget open -a /Applications/Zen.app'
 alt-m = 'exec-and-forget open -a /Applications/Mattermost.app'
-alt-p = 'exec-and-forget open -a /Applications/Postman.app'
 
 
 # 'service' binding mode declaration.

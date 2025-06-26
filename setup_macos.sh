@@ -30,7 +30,7 @@ brew install --cask docker
 brew install --cask ghostty
 brew install --cask obsidian
 brew install --cask hot
-brew install --cask zen
+brew install --cask min
 
 # sketchybar
 brew tap FelixKratz/formulae

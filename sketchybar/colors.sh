@@ -11,9 +11,11 @@ ORANGE=0xfff5a97f
 MAGENTA=0xffc6a0f6
 GREY=0xff939ab7
 TRANSPARENT=0x00000000
+PINK=0xfff5a0c5
+VIOLET_TRANSPARENT=0xaa9d7cd8
 
 # General bar colors
-BAR_COLOR=0xcc24273a #$GREY # Grey bar
+BAR_COLOR=$TRANSPARENT # Полностью прозрачная панель
 ICON_COLOR=$WHITE # Color of all icons
 LABEL_COLOR=$WHITE # Color of all labels
 

@@ -30,7 +30,6 @@ brew install --cask docker
 brew install --cask ghostty
 brew install --cask obsidian
 brew install --cask hot
-brew install --cask min
 brew install --cask karabiner-elements
 
 # sketchybar

@@ -23,7 +23,7 @@ cp -r ./sketchybar/* ~/.config/sketchybar/
 cp -r ./karabiner/* ~/.config/karabiner/
 
 cp .tmux.conf ~/
-cp .aerospace.toml
+cp .aerospace.toml ~/
 
 # Apps
 brew install --cask docker

@@ -1,7 +1,6 @@
 term = xterm-256color
 
 macos-icon = paper
-theme=solarized-osaka-night
 
 font-family = "FiraMono Nerd Font"
 font-thicken = true

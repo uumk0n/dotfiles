@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #Tools
-brew install bat yazi postgresql fzf tree npm fd nvim tmux lazygit ripgrep
+brew install bat yazi postgresql fzf tree npm fd nvim tmux lazygit ripgrep commitizen
 
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 

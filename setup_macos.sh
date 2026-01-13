@@ -14,12 +14,10 @@ cp -r ./nvim/* ~/.config/nvim/
 
 mkdir ~/.config/ghostty/
 mkdir ~/.config/yazi/
-mkdir ~/.config/sketchybar/
 mkdir ~/.config/karabiner/
 
 cp -r ./ghostty/* ~/.config/ghostty/
 cp -r ./yazi/* ~/.config/yazi/
-cp -r ./sketchybar/* ~/.config/sketchybar/
 cp -r ./karabiner/* ~/.config/karabiner/
 
 cp .tmux.conf ~/
@@ -31,12 +29,6 @@ brew install --cask ghostty
 brew install --cask obsidian
 brew install --cask hot
 brew install --cask karabiner-elements
-
-# sketchybar
-brew tap FelixKratz/formulae
-brew install sketchybar
-brew install --cask font-hack-nerd-font
-brew services start sketchybar
 
 #aerospace
 brew install --cask nikitabobko/tap/aerospace

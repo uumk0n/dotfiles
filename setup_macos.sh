@@ -24,7 +24,7 @@ cp .tmux.conf ~/
 cp .aerospace.toml ~/
 
 # Apps
-brew install --cask docker
+brew install --cask docker --force
 brew install --cask ghostty
 brew install --cask obsidian
 brew install --cask hot

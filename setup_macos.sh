@@ -21,7 +21,6 @@ cp -r ./yazi/* ~/.config/yazi/
 cp -r ./karabiner/* ~/.config/karabiner/
 
 cp .tmux.conf ~/
-cp .aerospace.toml ~/
 
 # Apps
 brew install --cask docker
@@ -29,8 +28,5 @@ brew install --cask ghostty
 brew install --cask obsidian
 brew install --cask hot
 brew install --cask karabiner-elements
-
-#aerospace
-brew install --cask nikitabobko/tap/aerospace
 
 echo "Скрипт выполнен успешно!"

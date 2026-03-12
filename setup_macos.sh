@@ -15,10 +15,12 @@ cp -r ./nvim/* ~/.config/nvim/
 mkdir ~/.config/ghostty/
 mkdir ~/.config/yazi/
 mkdir ~/.config/karabiner/
+mkdir ~/.config/fish/
 
 cp -r ./ghostty/* ~/.config/ghostty/
 cp -r ./yazi/* ~/.config/yazi/
 cp -r ./karabiner/* ~/.config/karabiner/
+cp -r ./fish/* ~/.config/fish/
 
 cp .tmux.conf ~/
 

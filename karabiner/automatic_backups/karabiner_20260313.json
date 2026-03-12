@@ -5,6 +5,7 @@
                 "rules": [
                     {
                         "description": "Cmd+Ctrl+Opt+Shift+A to Ctrl+A for tmux prefix",
+                        "enabled": false,
                         "manipulators": [
                             {
                                 "from": {
@@ -25,6 +26,7 @@
                         ]
                     },
                     {
+                        "enabled": false,
                         "manipulators": [
                             {
                                 "description": "Change caps_lock to command+control+option+shift.",
@@ -102,65 +104,13 @@
                         "vendor_id": 1452
                     },
                     "ignore": false
-                },
-                {
-                    "identifiers": {
-                        "is_pointing_device": true,
-                        "product_id": 4422,
-                        "vendor_id": 10462
-                    },
-                    "ignore": false
-                },
-                {
-                    "identifiers": {
-                        "is_keyboard": true,
-                        "product_id": 50495,
-                        "vendor_id": 1133
-                    },
-                    "ignore": true
-                },
-                {
-                    "identifiers": {
-                        "is_pointing_device": true,
-                        "product_id": 45121,
-                        "vendor_id": 1133
-                    },
-                    "ignore": false,
-                    "simple_modifications": [
-                        {
-                            "from": { "pointing_button": "button4" },
-                            "to": [{ "key_code": "left_arrow" }]
-                        },
-                        {
-                            "from": { "pointing_button": "button5" },
-                            "to": [{ "key_code": "right_arrow" }]
-                        }
-                    ]
-                },
-                {
-                    "identifiers": {
-                        "is_pointing_device": true,
-                        "product_id": 50495,
-                        "vendor_id": 1133
-                    },
-                    "ignore": false,
-                    "simple_modifications": [
-                        {
-                            "from": { "pointing_button": "button4" },
-                            "to": [{ "key_code": "left_arrow" }]
-                        },
-                        {
-                            "from": { "pointing_button": "button5" },
-                            "to": [{ "key_code": "right_arrow" }]
-                        }
-                    ]
                 }
             ],
             "name": "Default profile",
             "selected": true,
             "simple_modifications": [
                 {
-                    "from": { "key_code": "end" },
+                    "from": { "key_code": "caps_lock" },
                     "to": [{ "key_code": "left_control" }]
                 }
             ],

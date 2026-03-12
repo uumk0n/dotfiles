@@ -126,6 +126,8 @@
                         "vendor_id": 1133
                     },
                     "ignore": false,
+                    "pointing_motion_wheels_multiplier": 1.3,
+                    "pointing_motion_xy_multiplier": 1.3,
                     "simple_modifications": [
                         {
                             "from": { "pointing_button": "button4" },

@@ -1,0 +1,847 @@
+"use client";
+
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+
+import {
+  useDeleteCryptoAddress,
+  useUpdateCryptoAddress,
+} from "@/shared/api/query-hooks/use-crypto-addresses";
+import {
+  useDeletePayPalMethod,
+  usePayPalMethods,
+  useUpdatePayPalMethod,
+} from "@/shared/api/query-hooks/use-paypal-methods";
+import { useUpdateStripeMethod } from "@/shared/api/query-hooks/use-stripe-methods";
+import {
+  useDeletePaymentMethod,
+  useWalletInfo,
+} from "@/shared/api/query-hooks/use-wallet";
+import { getErrorMessage } from "@/shared/types/api-error.types";
+import { getCardIcon } from "@/shared/lib/utils/get-card-icon";
+import { CRYPTO_NETWORK_LABELS } from "@/shared/types";
+import type { CryptoNetwork } from "@/shared/types/wallet.types";
+import { toast } from "@/shared/ui/notification";
+import { Loader } from "@/shared/ui/loader";
+import { Button } from "@/shared/ui/shadcn/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogClose,
+} from "@/shared/ui/shadcn/dialog";
+import { Input } from "@/shared/ui/shadcn/input";
+import { Label } from "@/shared/ui/shadcn/label";
+import { Checkbox } from "@/shared/ui/shadcn/checkbox";
+import dynamic from "next/dynamic";
+import {
+  Building2,
+  CircleDollarSign,
+  CreditCard,
+  Trash2,
+  X,
+  ReceiptText,
+} from "lucide-react";
+
+const AddBankAccountModal = dynamic(
+  () =>
+    import("@/widgets/add-payment-method-modal/ui/add-bank-account-modal").then(
+      (mod) => ({
+        default: mod.AddBankAccountModal,
+      }),
+    ),
+  { ssr: false },
+);
+
+const AddPaymentMethodModal = dynamic(
+  () =>
+    import(
+      "@/widgets/add-payment-method-modal/ui/add-payment-method-modal"
+    ).then((mod) => ({
+      default: mod.AddPaymentMethodModal,
+    })),
+  { ssr: false },
+);
+
+const AddPayPalModal = dynamic(
+  () =>
+    import("@/widgets/add-payment-method-modal/ui/add-paypal-modal").then(
+      (mod) => ({
+        default: mod.AddPayPalModal,
+      }),
+    ),
+  { ssr: false },
+);
+
+const AddCryptoAddressModal = dynamic(
+  () =>
+    import(
+      "@/widgets/add-crypto-address-modal/ui/add-crypto-address-modal"
+    ).then((mod) => ({
+      default: mod.AddCryptoAddressModal,
+    })),
+  { ssr: false },
+);
+
+const WithdrawFundsModal = dynamic(
+  () =>
+    import("@/widgets/withdraw-funds-modal/ui/withdraw-funds-modal").then(
+      (mod) => ({
+        default: mod.WithdrawFundsModal,
+      }),
+    ),
+  { ssr: false },
+);
+
+const WithdrawBankModal = dynamic(
+  () =>
+    import("@/widgets/withdraw-bank-modal/ui/withdraw-bank-modal").then(
+      (mod) => ({
+        default: mod.WithdrawBankModal,
+      }),
+    ),
+  { ssr: false },
+);
+
+const DepositFundsModal = dynamic(
+  () =>
+    import("@/widgets/deposit-funds-modal/ui/deposit-funds-modal").then(
+      (mod) => ({
+        default: mod.DepositFundsModal,
+      }),
+    ),
+  { ssr: false },
+);
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function SectionCard({
+  title,
+  subtitle,
+  onAddNew,
+  addNewLabel = "Add New",
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  onAddNew?: () => void;
+  addNewLabel?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-8 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] px-6 pt-8 pb-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-1 flex-col gap-1">
+          <h2 className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="font-new-sans text-[#44403C] text-sm leading-[150%]">
+              {subtitle}
+            </p>
+          )}
+        </div>
+        {onAddNew && (
+          <button
+            type="button"
+            onClick={onAddNew}
+            className="flex h-9 items-center rounded-lg border border-[#A8A29E] px-3 font-medium font-new-sans text-[#44403C] text-sm transition-opacity hover:opacity-70"
+          >
+            {addNewLabel}
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function AccountRow({
+  icon,
+  name,
+  value,
+  onDelete,
+}: {
+  icon: React.ReactNode;
+  name: string;
+  value: string;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-[#A8A29E] p-4">
+      <div className="flex h-5 w-5 shrink-0 items-center justify-center text-[#44403C]">
+        {icon}
+      </div>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="flex-1 truncate font-new-sans text-[#44403C] text-base leading-[150%]">
+          {name}
+        </span>
+        <span className="font-bold font-new-sans text-[#44403C] text-base leading-[150%]">
+          {value}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onDelete}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#A8A29E] bg-[#F5F3EF] transition-opacity hover:opacity-70"
+        aria-label="Delete"
+      >
+        <Trash2 className="h-3.5 w-3.5 text-[#44403C]" />
+      </button>
+    </div>
+  );
+}
+
+function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl py-6">
+      <div className="text-[#A8A29E]">{icon}</div>
+      <p className="font-medium font-new-sans text-[#A8A29E] text-base">
+        {text}
+      </p>
+    </div>
+  );
+}
+
+function EditDialog({
+  open,
+  onOpenChange,
+  title,
+  nickname,
+  onNicknameChange,
+  isDefault,
+  onIsDefaultChange,
+  defaultLabel,
+  onSave,
+  isSaving,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  nickname: string;
+  onNicknameChange: (v: string) => void;
+  isDefault: boolean;
+  onIsDefaultChange: (v: boolean) => void;
+  defaultLabel: string;
+  onSave: () => void;
+  isSaving: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[500px] gap-0 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] p-0 shadow-[0px_20px_28px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center justify-between border-[#D6D3D1] border-b px-6 py-5">
+          <DialogTitle className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            {title}
+          </DialogTitle>
+          <DialogClose className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#A8A29E] text-[#44403C] transition-opacity hover:opacity-70">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+        </div>
+
+        <div className="flex flex-col gap-5 px-6 py-6">
+          <div className="flex flex-col gap-2">
+            <Label className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+              Nickname (Optional)
+            </Label>
+            <Input
+              value={nickname}
+              onChange={(e) => onNicknameChange(e.target.value)}
+              placeholder="e.g., Personal Account"
+              className="h-12 rounded-[4px] border border-[#A8A29E] px-3 font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
+            />
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2">
+            <Checkbox
+              checked={isDefault}
+              onCheckedChange={(checked) =>
+                onIsDefaultChange(checked as boolean)
+              }
+            />
+            <span className="font-new-sans font-normal text-[#44403C] text-sm">
+              {defaultLabel}
+            </span>
+          </label>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex h-12 flex-1 items-center justify-center rounded-lg border border-[#A8A29E] bg-[#F5F3EF] font-medium font-new-sans text-[#44403C] text-base transition-opacity hover:opacity-70"
+            >
+              Cancel
+            </button>
+            <Button
+              onClick={onSave}
+              loading={isSaving}
+              disabled={isSaving}
+              className="h-12 flex-1 rounded-lg bg-[#021171] font-medium font-new-sans text-[#F5F3EF] text-base"
+            >
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteDialog({
+  open,
+  onOpenChange,
+  itemType,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  itemType: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[420px] gap-0 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] p-0 shadow-[0px_20px_28px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center justify-between border-[#D6D3D1] border-b px-6 py-5">
+          <DialogTitle className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            Confirm Deletion
+          </DialogTitle>
+        </div>
+
+        <div className="flex flex-col gap-6 px-6 py-6">
+          <p className="font-new-sans text-[#44403C] text-base leading-[150%]">
+            Are you sure you want to delete this {itemType}? This action cannot
+            be undone.
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex h-12 flex-1 items-center justify-center rounded-lg border border-[#A8A29E] bg-[#F5F3EF] font-medium font-new-sans text-[#44403C] text-base transition-opacity hover:opacity-70"
+            >
+              Cancel
+            </button>
+            <Button
+              onClick={onConfirm}
+              className="h-12 flex-1 rounded-lg bg-[#021171] font-medium font-new-sans text-[#F5F3EF] text-base"
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+function WalletPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: walletInfo, isLoading, error, refetch } = useWalletInfo();
+  const { data: paypalMethods } = usePayPalMethods();
+  const deletePaymentMethod = useDeletePaymentMethod();
+  const deletePayPalMethod = useDeletePayPalMethod();
+  const deleteCryptoAddress = useDeleteCryptoAddress();
+  const updatePaymentMethod = useUpdateStripeMethod();
+  const updatePayPalMethod = useUpdatePayPalMethod();
+  const updateCryptoAddress = useUpdateCryptoAddress();
+
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const warning = searchParams.get("warning");
+    const canceled = searchParams.get("canceled");
+
+    if (success === "paypal_connected") {
+      toast.success("PayPal account connected successfully");
+      router.replace(APP_ROUTES.WALLET.ROOT);
+    } else if (warning === "paypal_duplicate") {
+      toast.warning("This PayPal account is already connected to your wallet");
+      router.replace(APP_ROUTES.WALLET.ROOT);
+    } else if (canceled === "paypal") {
+      toast.info("PayPal connection was canceled");
+      router.replace(APP_ROUTES.WALLET.ROOT);
+    }
+  }, [searchParams, router]);
+
+  const [isAddBankModalOpen, setIsAddBankModalOpen] = useState(false);
+  const [isAddCardModalOpen, setIsAddCardModalOpen] = useState(false);
+  const [isAddPayPalModalOpen, setIsAddPayPalModalOpen] = useState(false);
+  const [isAddCryptoModalOpen, setIsAddCryptoModalOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    type: "payment" | "paypal" | "crypto";
+    id: string;
+    label: string;
+  } | null>(null);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<{
+    id: string;
+    nickname: string;
+    isDefault: boolean;
+  } | null>(null);
+  const [editPayPalMethod, setEditPayPalMethod] = useState<{
+    id: string;
+    nickname: string;
+    isDefault: boolean;
+  } | null>(null);
+  const [editCryptoAddress, setEditCryptoAddress] = useState<{
+    id: string;
+    label: string;
+    isDefault: boolean;
+  } | null>(null);
+  const [isWithdrawCryptoModalOpen, setIsWithdrawCryptoModalOpen] =
+    useState(false);
+  const [isWithdrawBankModalOpen, setIsWithdrawBankModalOpen] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+
+  function confirmDelete() {
+    if (!deleteConfirmation) return;
+
+    if (deleteConfirmation.type === "payment") {
+      deletePaymentMethod.mutate(deleteConfirmation.id);
+    } else if (deleteConfirmation.type === "paypal") {
+      deletePayPalMethod.mutate(deleteConfirmation.id);
+    } else {
+      deleteCryptoAddress.mutate(deleteConfirmation.id);
+    }
+
+    setDeleteConfirmation(null);
+  }
+
+  async function savePaymentMethodEdit() {
+    if (!editPaymentMethod) return;
+    await updatePaymentMethod.mutateAsync({
+      id: editPaymentMethod.id,
+      data: {
+        nickname: editPaymentMethod.nickname,
+        setAsDefault: editPaymentMethod.isDefault,
+      },
+    });
+    setEditPaymentMethod(null);
+  }
+
+  async function savePayPalMethodEdit() {
+    if (!editPayPalMethod) return;
+    await updatePayPalMethod.mutateAsync({
+      id: editPayPalMethod.id,
+      data: {
+        nickname: editPayPalMethod.nickname,
+        setAsDefault: editPayPalMethod.isDefault,
+      },
+    });
+    setEditPayPalMethod(null);
+  }
+
+  async function saveCryptoAddressEdit() {
+    if (!editCryptoAddress) return;
+    await updateCryptoAddress.mutateAsync({
+      id: editCryptoAddress.id,
+      data: {
+        label: editCryptoAddress.label,
+        setAsDefault: editCryptoAddress.isDefault,
+      },
+    });
+    setEditCryptoAddress(null);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (error) {
+    const errorMessage = getErrorMessage(error, error.message);
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="font-new-sans text-[#44403C] text-base">
+            {errorMessage}
+          </p>
+          <Button
+            onClick={() => refetch()}
+            className="h-9 rounded-lg bg-[#021171] px-4 font-new-sans text-[#F5F3EF] text-sm"
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!walletInfo) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <p className="font-new-sans text-[#44403C] text-base">
+          Failed to load wallet information
+        </p>
+      </div>
+    );
+  }
+
+  const bankAccounts = walletInfo.savedPaymentMethods.filter(
+    (m) => m.type === "bank",
+  );
+  const cards = walletInfo.savedPaymentMethods.filter((m) => m.type === "card");
+
+  return (
+    <div className="mx-auto flex w-full max-w-[1500px] flex-col items-center gap-10 px-4 py-16 sm:px-6 lg:px-20 lg:py-20">
+      {/* Page Header */}
+      <div className="flex w-full max-w-[463px] flex-col items-center gap-3 text-center">
+        <h1 className="font-extralight font-new-serif text-[#44403C] text-[30px] leading-[120%]">
+          Accounts & Wallets
+        </h1>
+        <p className="font-new-sans text-[#44403C] text-base leading-[150%]">
+          Manage your payment methods, and registered accounts or crypto wallets
+          to get paid.
+        </p>
+      </div>
+
+      {/* Section Cards */}
+      <div className="flex w-full max-w-[600px] flex-col gap-5">
+        {/* Bank Account */}
+        <SectionCard
+          title="Bank Account"
+          subtitle="Add bank accounts to receive payments."
+          onAddNew={() => setIsAddBankModalOpen(true)}
+          disabled=true
+        >
+          {bankAccounts.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {bankAccounts.map((method) => {
+                const accountLabel =
+                  method.nickname ||
+                  (method.brand
+                    ? `${method.brand.charAt(0).toUpperCase() + method.brand.slice(1)} Account`
+                    : "Bank Account");
+                return (
+                  <AccountRow
+                    key={method.id}
+                    icon={<Building2 className="h-5 w-5" />}
+                    name={accountLabel}
+                    value={`****${method.last4}`}
+                    onDelete={() =>
+                      setDeleteConfirmation({
+                        type: "payment",
+                        id: method.id,
+                        label: "bank account",
+                      })
+                    }
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<Building2 className="h-5 w-5" />}
+              text="No bank accounts added"
+            />
+          )}
+        </SectionCard>
+
+        {/* Crypto Wallets */}
+        <SectionCard
+          title="Crypto Wallets"
+          subtitle="Add up to 5 wallets to receive and make stablecoin payments."
+          onAddNew={() => setIsAddCryptoModalOpen(true)}
+        >
+          {walletInfo.savedCryptoAddresses.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {walletInfo.savedCryptoAddresses.map((address) => {
+                const network =
+                  CRYPTO_NETWORK_LABELS[address.network as CryptoNetwork] ||
+                  address.network;
+                const shortAddress = `0x${address.address.slice(2, 5)}...${address.address.slice(-5)}`;
+                return (
+                  <AccountRow
+                    key={address.id}
+                    icon={<CircleDollarSign className="h-5 w-5" />}
+                    name={address.label || network}
+                    value={shortAddress}
+                    onDelete={() =>
+                      setDeleteConfirmation({
+                        type: "crypto",
+                        id: address.id,
+                        label: "crypto address",
+                      })
+                    }
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<CircleDollarSign className="h-5 w-5" />}
+              text="No crypto wallets added"
+            />
+          )}
+        </SectionCard>
+
+        {/* Debit/Credit Cards */}
+        <SectionCard
+          title="Debit/Credit Cards"
+          onAddNew={() => setIsAddCardModalOpen(true)}
+        >
+          {cards.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {cards.map((method) => {
+                const cardIcon = getCardIcon(method.brand);
+                return (
+                  <div
+                    key={method.id}
+                    className="flex items-center gap-2 rounded-xl border border-[#A8A29E] p-4"
+                  >
+                    <div className="flex h-5 w-6 shrink-0 items-center justify-center">
+                      {cardIcon || (
+                        <div className="h-4 w-6 rounded-sm bg-[#44403C]/20" />
+                      )}
+                    </div>
+                    <span className="flex-1 font-medium font-new-sans text-[#44403C] text-base leading-[150%]">
+                      {`**** **** **** ${method.last4}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDeleteConfirmation({
+                          type: "payment",
+                          id: method.id,
+                          label: "card",
+                        })
+                      }
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#A8A29E] bg-[#F5F3EF] transition-opacity hover:opacity-70"
+                      aria-label="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-[#44403C]" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<CreditCard className="h-5 w-5" />}
+              text="No cards added"
+            />
+          )}
+        </SectionCard>
+
+        {/* PayPal Accounts */}
+        <SectionCard
+          title="PayPal Accounts"
+          subtitle="Add up to 2 PayPal Accounts to receive and make payments."
+          onAddNew={() => setIsAddPayPalModalOpen(true)}
+        >
+          {(paypalMethods?.length ?? 0) > 0 ? (
+            <div className="flex flex-col gap-2">
+              {paypalMethods?.map((method) => (
+                <AccountRow
+                  key={method.id}
+                  icon={
+                    <span className="font-bold font-new-sans text-[#003087] text-[10px] leading-none">
+                      PP
+                    </span>
+                  }
+                  name={method.nickname || method.email}
+                  value={method.email}
+                  onDelete={() =>
+                    setDeleteConfirmation({
+                      type: "paypal",
+                      id: method.id,
+                      label: "PayPal account",
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={
+                <span className="font-bold font-new-sans text-[#A8A29E] text-base">
+                  PP
+                </span>
+              }
+              text="No PayPal accounts added"
+            />
+          )}
+        </SectionCard>
+
+        {/* Transaction History */}
+        <div className="flex flex-col gap-5 rounded-2xl bg-[#EDE9E3] px-6 py-10">
+          <ReceiptText
+            className="h-10 w-10 text-[#44403C]"
+            strokeWidth={1.25}
+          />
+          <div className="flex flex-col gap-2">
+            <h3 className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+              Looking for your transaction history?
+            </h3>
+            <p className="font-new-sans text-[#44403C] text-base leading-[150%]">
+              Find historical payments received from your sold or buyback
+              offers, in the transaction history page.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push(APP_ROUTES.WALLET.PAYMENT_HISTORY)}
+            className="flex h-9 w-fit items-center rounded-lg bg-[#021171] px-4 font-medium font-new-sans text-[#F5F3EF] text-sm transition-opacity hover:opacity-90"
+          >
+            Transaction History
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Modals ─── */}
+      <AddBankAccountModal
+        isOpen={isAddBankModalOpen}
+        onClose={() => setIsAddBankModalOpen(false)}
+      />
+      <AddPaymentMethodModal
+        isOpen={isAddCardModalOpen}
+        onClose={() => setIsAddCardModalOpen(false)}
+      />
+      <AddPayPalModal
+        isOpen={isAddPayPalModalOpen}
+        onClose={() => setIsAddPayPalModalOpen(false)}
+      />
+      <AddCryptoAddressModal
+        isOpen={isAddCryptoModalOpen}
+        onClose={() => setIsAddCryptoModalOpen(false)}
+      />
+      <WithdrawFundsModal
+        isOpen={isWithdrawCryptoModalOpen}
+        onClose={() => setIsWithdrawCryptoModalOpen(false)}
+      />
+      <WithdrawBankModal
+        isOpen={isWithdrawBankModalOpen}
+        onClose={() => setIsWithdrawBankModalOpen(false)}
+      />
+      <DepositFundsModal
+        isOpen={isDepositModalOpen}
+        onClose={() => setIsDepositModalOpen(false)}
+      />
+
+      {/* Edit Payment Method */}
+      <EditDialog
+        open={!!editPaymentMethod}
+        onOpenChange={() => setEditPaymentMethod(null)}
+        title="Edit Payment Method"
+        nickname={editPaymentMethod?.nickname ?? ""}
+        onNicknameChange={(v) =>
+          setEditPaymentMethod((prev) => prev && { ...prev, nickname: v })
+        }
+        isDefault={editPaymentMethod?.isDefault ?? false}
+        onIsDefaultChange={(v) =>
+          setEditPaymentMethod((prev) => prev && { ...prev, isDefault: v })
+        }
+        defaultLabel="Set as default payment method"
+        onSave={savePaymentMethodEdit}
+        isSaving={updatePaymentMethod.isPending}
+      />
+
+      {/* Edit PayPal Method */}
+      <EditDialog
+        open={!!editPayPalMethod}
+        onOpenChange={() => setEditPayPalMethod(null)}
+        title="Edit PayPal Method"
+        nickname={editPayPalMethod?.nickname ?? ""}
+        onNicknameChange={(v) =>
+          setEditPayPalMethod((prev) => prev && { ...prev, nickname: v })
+        }
+        isDefault={editPayPalMethod?.isDefault ?? false}
+        onIsDefaultChange={(v) =>
+          setEditPayPalMethod((prev) => prev && { ...prev, isDefault: v })
+        }
+        defaultLabel="Set as default PayPal method"
+        onSave={savePayPalMethodEdit}
+        isSaving={updatePayPalMethod.isPending}
+      />
+
+      {/* Edit Crypto Address */}
+      <Dialog
+        open={!!editCryptoAddress}
+        onOpenChange={() => setEditCryptoAddress(null)}
+      >
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-[500px] gap-0 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] p-0 shadow-[0px_20px_28px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center justify-between border-[#D6D3D1] border-b px-6 py-5">
+            <DialogTitle className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+              Edit Crypto Address
+            </DialogTitle>
+            <DialogClose className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#A8A29E] text-[#44403C] transition-opacity hover:opacity-70">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
+          {editCryptoAddress && (
+            <div className="flex flex-col gap-5 px-6 py-6">
+              <div className="flex flex-col gap-2">
+                <Label className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+                  Label
+                </Label>
+                <Input
+                  value={editCryptoAddress.label}
+                  onChange={(e) =>
+                    setEditCryptoAddress({
+                      ...editCryptoAddress,
+                      label: e.target.value,
+                    })
+                  }
+                  placeholder="e.g., My Main Wallet"
+                  className="h-12 rounded-[4px] border border-[#A8A29E] px-3 font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2">
+                <Checkbox
+                  checked={editCryptoAddress.isDefault}
+                  onCheckedChange={(checked) =>
+                    setEditCryptoAddress({
+                      ...editCryptoAddress,
+                      isDefault: checked as boolean,
+                    })
+                  }
+                />
+                <span className="font-new-sans font-normal text-[#44403C] text-sm">
+                  Set as default token address
+                </span>
+              </label>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditCryptoAddress(null)}
+                  className="flex h-12 flex-1 items-center justify-center rounded-lg border border-[#A8A29E] bg-[#F5F3EF] font-medium font-new-sans text-[#44403C] text-base transition-opacity hover:opacity-70"
+                >
+                  Cancel
+                </button>
+                <Button
+                  onClick={saveCryptoAddressEdit}
+                  loading={updateCryptoAddress.isPending}
+                  disabled={updateCryptoAddress.isPending}
+                  className="h-12 flex-1 rounded-lg bg-[#021171] font-medium font-new-sans text-[#F5F3EF] text-base"
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <DeleteDialog
+        open={!!deleteConfirmation}
+        onOpenChange={() => setDeleteConfirmation(null)}
+        itemType={deleteConfirmation?.label ?? "item"}
+        onConfirm={confirmDelete}
+      />
+    </div>
+  );
+}
+
+export default function WalletPage() {
+  return (
+    <Suspense fallback={<Loader />}>
+      <WalletPageContent />
+    </Suspense>
+  );
+}

@@ -1,0 +1,636 @@
+"use client";
+
+import { useAuth } from "@/entities/auth";
+import {
+  type Address,
+  type UserNotificationsSetting,
+  UserSetting,
+  useAddresses,
+  useDeleteAddress,
+  useProfile,
+  useUpdateProfilePhoto,
+  useUpdateUserSettings,
+  useUserSettings,
+} from "@/entities/profile";
+import {
+  useFileUpload,
+  useSignedFileUrl,
+} from "@/shared/api/query-hooks/use-file-upload";
+import type { SupportedCurrency } from "@/shared/config/currency-config";
+import {
+  CURRENCY_META,
+  SUPPORTED_CURRENCIES,
+} from "@/shared/config/currency-config";
+import {
+  IMAGE_ACCEPT_TYPES,
+  type MimeType,
+  S3_FOLDERS,
+} from "@/shared/constants/mime-types";
+import { KycRedirectHandler } from "@/shared/lib/kyc-redirect";
+import { cn } from "@/shared/lib/utils";
+import { getFullName } from "@/shared/lib/utils/get-full-name";
+import { useCurrencyStore } from "@/shared/model/currency-store";
+import { GoogleIcon } from "@/shared/ui/icons/google-icon";
+import { toast } from "@/shared/ui/notification";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Switch } from "@/shared/ui/shadcn/switch";
+import { KycStatusSection } from "@/widgets/kyc-status-section";
+import {
+  BellRing,
+  ChevronDown,
+  KeyRound,
+  MapPinHouse,
+  RefreshCw,
+  ShieldAlert,
+  Trash2,
+} from "lucide-react";
+import { useSession } from "next-auth/react";
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import { type ReactNode, Suspense, useCallback, useRef, useState } from "react";
+
+const EditProfileModal = dynamic(
+  () =>
+    import("@/widgets/edit-profile-modal").then((mod) => ({
+      default: mod.EditProfileModal,
+    })),
+  { ssr: false }
+);
+
+const AddressModal = dynamic(
+  () =>
+    import("@/widgets/address-modal").then((mod) => ({
+      default: mod.AddressModal,
+    })),
+  { ssr: false }
+);
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const addressTypeLabels: Record<string, string> = {
+  home: "Home/Residence",
+  work: "Work/Office",
+  other: "Other",
+};
+
+// ---------------------------------------------------------------------------
+// Primitives
+// ---------------------------------------------------------------------------
+
+function SettingsCard({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-2 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] p-6",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CardHeader({ title, action }: { title: string; action?: ReactNode }) {
+  return (
+    <div className="mb-6 flex items-center justify-between gap-2">
+      <h2 className="font-light font-new-serif text-2xl leading-[120%] tracking-[0px]">
+        {title}
+      </h2>
+      {action}
+    </div>
+  );
+}
+
+function SmallButton({
+  onClick,
+  children,
+}: {
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      className="rounded-lg border border-[#A8A29E] bg-[#F5F3EF] px-3 py-1.5 font-medium font-new-sans text-[#44403C] text-sm transition-colors hover:bg-[#EDE9E3]"
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </Button>
+  );
+}
+
+function FieldBox({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-[#E7E5E4] bg-[#EDE9E3] px-5 py-[28px]">
+      {children}
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="font-new-sans text-base leading-[150%] tracking-[-1%]">
+      {children}
+    </span>
+  );
+}
+
+function FieldValue({
+  children,
+  muted,
+}: {
+  children: ReactNode;
+  muted?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "font-new-serif text-2xl leading-[120%] tracking-[0px]",
+        muted ? "text-[#A8A29E]" : "text-[#44403C]"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Profile Picture card
+// ---------------------------------------------------------------------------
+
+function ProfilePictureCard({ photoFileId }: { photoFileId: string | null }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mutate: updatePhoto, isPending: isUpdating } =
+    useUpdateProfilePhoto();
+  const { mutate: uploadFile, isPending: isUploading } = useFileUpload();
+  const { data: photoData } = useSignedFileUrl(
+    photoFileId ?? "",
+    !!photoFileId
+  );
+
+  const isPending = isUploading || isUpdating;
+
+  function handleReplaceClick() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    uploadFile(
+      {
+        file,
+        folder: S3_FOLDERS.STATIC,
+        mime: file.type as MimeType,
+        fileName: file.name,
+      },
+      {
+        onSuccess: (uploaded) => {
+          updatePhoto(
+            { photoFileId: uploaded.fileId },
+            {
+              onSuccess: () => toast.success("Profile picture updated"),
+              onError: () => toast.error("Failed to update profile picture"),
+            }
+          );
+        },
+      }
+    );
+
+    // Reset input so the same file can be re-selected
+    event.target.value = "";
+  }
+
+  function handleDelete() {
+    updatePhoto(
+      { photoFileId: null },
+      {
+        onSuccess: () => toast.success("Profile picture removed"),
+        onError: () => toast.error("Failed to remove profile picture"),
+      }
+    );
+  }
+
+  return (
+    <SettingsCard>
+      <CardHeader title="Profile Picture" />
+
+      <div className="new-design flex items-center justify-between gap-3 rounded-lg bg-[#EDE9E3] p-4 text-center">
+        {/* Avatar */}
+        <div className="h-9 w-9 shrink-0 overflow-hidden bg-[#D6D3D1]">
+          {photoData?.url ? (
+            <Image
+              alt="Profile picture"
+              className="h-full w-full object-cover"
+              height={36}
+              src={photoData.url}
+              width={36}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <span className="flex items-center justify-center font-new-sans text-[#78716C] text-[9px]">
+                No photo
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-4">
+          <button
+            className="rounded-lg border border-[#A8A29E] bg-[#F5F3EF] px-3 py-1.5 font-medium font-new-sans text-[#44403C] text-sm transition-colors hover:bg-[#EDE9E3]"
+            disabled={isPending}
+            onClick={handleReplaceClick}
+            type="button"
+          >
+            {isUploading ? "Uploading…" : "Replace Profile Image"}
+          </button>
+
+          {photoFileId && (
+            <button
+              aria-label="Remove profile picture"
+              className="transition-colors hover:text-[#44403C]"
+              disabled={isPending}
+              onClick={handleDelete}
+              type="button"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <input
+        accept={IMAGE_ACCEPT_TYPES}
+        className="hidden"
+        onChange={handleFileChange}
+        ref={fileInputRef}
+        type="file"
+      />
+    </SettingsCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Notifications card (real API)
+// ---------------------------------------------------------------------------
+
+function NotificationsCard() {
+  const { data: userSettings, isLoading } = useUserSettings();
+  const updateMutation = useUpdateUserSettings();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const notif = userSettings?.[UserSetting.Notifications] ?? null;
+
+  const handleToggle = useCallback(
+    (field: keyof UserNotificationsSetting, value: boolean) => {
+      if (!notif) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        updateMutation.mutate(
+          { [UserSetting.Notifications]: { ...notif, [field]: value } },
+          {
+            onSuccess: () => toast.success("Settings updated"),
+            onError: () => toast.error("Failed to update settings"),
+          }
+        );
+      }, 300);
+    },
+    [notif, updateMutation]
+  );
+
+  const items: {
+    field: keyof UserNotificationsSetting;
+    icon: ReactNode;
+    title: string;
+    description: string;
+  }[] = [
+    {
+      field: "general",
+      icon: <BellRing className="h-5 w-5 shrink-0 text-[#78716C]" />,
+      title: "General Notification",
+      description: "Enable all Notification for Updates and Alerts",
+    },
+    {
+      field: "buyback",
+      icon: <RefreshCw className="h-5 w-5 shrink-0 text-[#78716C]" />,
+      title: "BuyBack Notifications",
+      description: "Alerts for BuyBack Repayment, due dates etc",
+    },
+    {
+      field: "accountSecurity",
+      icon: <ShieldAlert className="h-5 w-5 shrink-0 text-[#78716C]" />,
+      title: "Account Security Alerts",
+      description: "Notifications for login attempts, password changes",
+    },
+  ];
+
+  return (
+    <SettingsCard>
+      <CardHeader title="Notification settings" />
+
+      <div className="flex flex-col divide-y divide-[#E7E5E4]">
+        {isLoading
+          ? [1, 2, 3].map((i) => (
+              <div
+                className="h-14 animate-pulse bg-[#F5F3EF] first:rounded-t-xl last:rounded-b-xl"
+                key={i}
+              />
+            ))
+          : items.map(({ field, icon, title, description }) => (
+              <div
+                className="flex items-center gap-4 py-3 first:pt-0 last:pb-0"
+                key={field}
+              >
+                {icon}
+                <div className="flex flex-1 flex-col leading-[150%] tracking-[-1%]">
+                  <span className="font-medium font-new-sans text-sm">
+                    {title}
+                  </span>
+                  <span className="font-new-sans text-sm">{description}</span>
+                </div>
+                <Switch
+                  checked={notif?.[field] ?? false}
+                  disabled={!notif}
+                  onCheckedChange={(value) => handleToggle(field, value)}
+                />
+              </div>
+            ))}
+      </div>
+    </SettingsCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
+
+export function ProfilePage() {
+  const { isAuthenticator } = useAuth();
+  const { data: session } = useSession();
+  const { data: profile } = useProfile();
+  const { data: addressesData } = useAddresses();
+  const addresses = Array.isArray(addressesData) ? addressesData : [];
+  const { mutate: deleteAddress } = useDeleteAddress();
+  const { mutate: updateSettings } = useUpdateUserSettings();
+  const currency = useCurrencyStore((state) => state.currency);
+
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+
+  function handleCurrencyChange(newCurrency: SupportedCurrency) {
+    updateSettings(
+      { [UserSetting.Currency]: newCurrency },
+      {
+        onSuccess: () => {
+          useCurrencyStore.getState().setCurrency(newCurrency);
+          toast.success("Currency updated");
+        },
+        onError: () => toast.error("Failed to update currency"),
+      }
+    );
+  }
+
+  function openAddressModal(addr: Address | null) {
+    setSelectedAddress(addr);
+    setIsAddressModalOpen(true);
+  }
+
+  // Determine auth provider from idToken prefix / session provider field
+  const isGoogleAuth = (() => {
+    const idToken = session?.idToken ?? "";
+    return idToken.toLowerCase().includes("google");
+  })();
+
+  if (!profile) return null;
+
+  return (
+    <>
+      {!isAuthenticator && (
+        <Suspense fallback={null}>
+          <KycRedirectHandler />
+        </Suspense>
+      )}
+
+      {/* Page header */}
+      <div className="new-design mx-auto mb-8 flex w-full max-w-[600px] flex-col items-center gap-2 px-4 pt-10 text-center">
+        <h1 className="font-extralight font-new-serif text-3xl leading-[120%] tracking-[0]">
+          Profile Settings
+        </h1>
+        <p className="font-new-sans text-base leading-[150%] tracking-[-1%]">
+          Update your information, see your verification status, and adjust
+          <br className="hidden sm:block" />
+          your notification preferences, all in one place.
+        </p>
+      </div>
+
+      <div className="mx-auto flex w-full max-w-[600px] flex-col gap-4 px-4 pb-16">
+        {/* ---------------------------------------------------------------- */}
+        {/* Card 1: Profile Details                                           */}
+        {/* ---------------------------------------------------------------- */}
+        <SettingsCard>
+          <CardHeader
+            action={
+              <SmallButton onClick={() => setIsEditProfileOpen(true)}>
+                Edit
+              </SmallButton>
+            }
+            title="Profile Details"
+          />
+
+          {/* Auth provider row + Name + UID */}
+          <div className="flex flex-col gap-3 rounded-xl border border-[#E7E5E4] bg-[#EDE9E3] px-5 py-[28px]">
+            <div className="flex items-center gap-1.5">
+              {isGoogleAuth ? (
+                <GoogleIcon className="h-3.5 w-3.5" />
+              ) : (
+                <KeyRound className="h-3.5 w-3.5 text-[#A8A29E]" />
+              )}
+              <span className="font-new-sans text-base leading-[150%] tracking-[-1%]">
+                {isGoogleAuth ? "Google" : "Full name"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium font-new-sans text-[#44403C] text-sm">
+                {getFullName(profile)}
+              </span>
+              <span className="rounded-sm bg-[#ECFDF5] px-2 py-0.5 font-new-sans text-[#047857] text-xs">
+                UID-{profile.id.slice(0, 4)}
+              </span>
+            </div>
+          </div>
+
+          {/* Email */}
+          <FieldBox>
+            <FieldLabel>Email</FieldLabel>
+            <FieldValue>{profile.email}</FieldValue>
+          </FieldBox>
+
+          {/* Phone */}
+          <FieldBox>
+            <FieldLabel>Phone number</FieldLabel>
+            <FieldValue muted={!profile.phone}>
+              {profile.phone || "Add your phone number"}
+            </FieldValue>
+          </FieldBox>
+        </SettingsCard>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Card 2: Profile Picture                                           */}
+        {/* ---------------------------------------------------------------- */}
+        <ProfilePictureCard photoFileId={profile.photoFileId} />
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Card 3: Account Verification (KYC)                               */}
+        {/* ---------------------------------------------------------------- */}
+        {!isAuthenticator && <KycStatusSection />}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Card 3: Registered Addresses                                     */}
+        {/* ---------------------------------------------------------------- */}
+        <SettingsCard>
+          <CardHeader
+            action={
+              <SmallButton onClick={() => openAddressModal(null)}>
+                Add Address
+              </SmallButton>
+            }
+            title="Registered Addresses"
+          />
+
+          {addresses.length === 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-[#E7E5E4] bg-[#EDE9E3] px-4 py-3">
+              <MapPinHouse className="mt-0.5 h-4 w-4 shrink-0 text-[#A8A29E]" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-bold font-new-sans text-[#44403C] text-sm leading-[150%] tracking-[-1%]">
+                  Add your first address
+                </span>
+                <span className="font-new-sans text-xs leading-[150%] tracking-[-1%]">
+                  Reminder: Your address is missing from your profile. Please
+                  update it at the earliest to ensure uninterrupted service and
+                  smooth processing.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {addresses?.map((addr) => (
+            <button
+              className="new-design relative flex w-full flex-row items-start gap-3 rounded-2xl bg-[#EDE9E3] px-5 py-4 text-left transition-all hover:bg-[#EDE9E3]/80"
+              key={addr.id}
+              onClick={() => openAddressModal(addr)}
+              type="button"
+            >
+              <MapPinHouse className="mt-0.5 h-5 w-5 shrink-0" />
+
+              <div className="flex flex-1 flex-col gap-1">
+                <span className="font-bold text-sm leading-tight">
+                  {(addr.addressType &&
+                    addressTypeLabels[addr.addressType.toLowerCase()]) ||
+                    addr.addressType ||
+                    "Address"}
+                </span>
+                <p className="max-w-[90%] text-sm leading-relaxed">
+                  {addr.addressLine1}
+                  {addr.addressLine2 ? `, ${addr.addressLine2}` : ""}
+                  {`, ${addr.city}, ${addr.country?.name}`}
+                  {addr.zip ? `, ${addr.zip}` : ""}
+                </p>
+                {addr.isPrimary && (
+                  <div className="mt-2 w-fit rounded-lg bg-[#ECFDF5] px-3 py-1">
+                    <span className="font-medium text-[#047857] text-sm">
+                      Primary Address
+                    </span>
+                  </div>
+                )}
+              </div>
+              <Button
+                aria-label="Delete address"
+                className="absolute top-1 right-2 p-2 transition-colors hover:text-[#44403C]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  deleteAddress(addr.id, {
+                    onSuccess: () =>
+                      toast.success("Address deleted successfully"),
+                    onError: () => toast.error("Failed to delete address"),
+                  });
+                }}
+                role="button"
+                variant={"simple"}
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            </button>
+          ))}
+        </SettingsCard>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Card 4: Set Currency                                              */}
+        {/* ---------------------------------------------------------------- */}
+        <SettingsCard className="gap-0">
+          <div className="flex items-center justify-between">
+            <h2 className="font-light font-new-serif text-2xl leading-[120%]">
+              Set Currency
+            </h2>
+            <div className="relative">
+              <Button
+                className="flex items-center gap-1.5 rounded-lg border border-[#A8A29E] bg-[#F5F3EF] px-3 py-1.5 font-medium font-new-sans text-[#44403C] text-sm transition-colors hover:bg-[#EDE9E3]"
+                onClick={(event) => {
+                  const select = event.currentTarget
+                    .nextElementSibling as HTMLSelectElement | null;
+                  select?.focus();
+                  select?.click();
+                }}
+                type="button"
+              >
+                {CURRENCY_META[currency].flag} {currency}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+              <select
+                aria-label="Select currency"
+                className="absolute inset-0 cursor-pointer opacity-0"
+                onChange={(event) =>
+                  handleCurrencyChange(event.target.value as SupportedCurrency)
+                }
+                value={currency}
+              >
+                {SUPPORTED_CURRENCIES.map((cur) => (
+                  <option key={cur} value={cur}>
+                    {CURRENCY_META[cur].flag} {cur}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </SettingsCard>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Card 5: Notification settings (real API, moved from Settings)    */}
+        {/* ---------------------------------------------------------------- */}
+        <NotificationsCard />
+      </div>
+
+      <EditProfileModal
+        onOpenChange={setIsEditProfileOpen}
+        open={isEditProfileOpen}
+        profile={profile}
+      />
+
+      <AddressModal
+        address={selectedAddress}
+        onOpenChange={setIsAddressModalOpen}
+        open={isAddressModalOpen}
+      />
+    </>
+  );
+}

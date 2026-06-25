@@ -1,0 +1,242 @@
+"use client";
+
+import type { Profile } from "@/entities/profile";
+import { useUpdateProfile } from "@/entities/profile";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+} from "@/shared/ui/shadcn/dialog";
+import { UserCircle } from "@/shared/ui/icons";
+import { toast } from "@/shared/ui/notification";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Input } from "@/shared/ui/shadcn/input";
+import { Label } from "@/shared/ui/shadcn/label";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { X } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import type { EditProfileFormData } from "../model/types";
+
+const editProfileSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  patronymic: z.string().optional(),
+  email: z.string().email("Invalid email").optional(),
+  phone: z.string().optional(),
+  uaeId: z.string().optional(),
+});
+
+interface EditProfileModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  profile: Profile;
+}
+
+export function EditProfileModal({
+  open,
+  onOpenChange,
+  profile,
+}: EditProfileModalProps) {
+  const { mutate: updateProfile, isPending } = useUpdateProfile();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<EditProfileFormData>({
+    resolver: zodResolver(editProfileSchema),
+    defaultValues: {
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      patronymic: profile.patronymic ?? "",
+      email: profile.email,
+      phone: profile.phone,
+      uaeId: "",
+    },
+  });
+
+  function onSubmit(data: EditProfileFormData) {
+    updateProfile(
+      {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        patronymic: data.patronymic || undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Profile updated successfully");
+          onOpenChange(false);
+        },
+        onError: () => {
+          toast.error("Failed to update profile");
+        },
+      },
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="new-design w-[calc(100%-32px)] min-w-0 gap-0 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] p-0 shadow-[0px_20px_28px_rgba(0,0,0,0.05)] sm:w-[512px]">
+        {/* Header */}
+        <div className="flex flex-col gap-2 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <UserCircle width="40px" height="40px" color="#44403C" />
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4 text-[#A8A29E]" strokeWidth={1.25} />
+              </button>
+            </DialogClose>
+          </div>
+          <h2 className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            Edit Profile Details
+          </h2>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <div className="flex flex-col gap-4 px-4 py-2">
+            {/* First Name + Last Name row */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex flex-1 flex-col gap-1">
+                <Label
+                  htmlFor="firstName"
+                  className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]"
+                >
+                  First Name
+                </Label>
+                <Input
+                  id="firstName"
+                  {...register("firstName")}
+                  className="rounded-[4px] border-[#A8A29E] bg-transparent"
+                  aria-invalid={!!errors.firstName}
+                />
+                {errors.firstName && (
+                  <p className="font-new-sans text-red-600 text-xs">
+                    {errors.firstName.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-1 flex-col gap-1">
+                <Label
+                  htmlFor="lastName"
+                  className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]"
+                >
+                  Last Name
+                </Label>
+                <Input
+                  id="lastName"
+                  {...register("lastName")}
+                  className="rounded-[4px] border-[#A8A29E] bg-transparent"
+                  aria-invalid={!!errors.lastName}
+                />
+                {errors.lastName && (
+                  <p className="font-new-sans text-red-600 text-xs">
+                    {errors.lastName.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Middle Name + UAE ID row */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex flex-1 flex-col gap-1">
+                <Label
+                  htmlFor="patronymic"
+                  className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]"
+                >
+                  Middle Name (optional)
+                </Label>
+                <Input
+                  id="patronymic"
+                  {...register("patronymic")}
+                  className="rounded-[4px] border-[#A8A29E] bg-transparent"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1">
+                <Label
+                  htmlFor="uaeId"
+                  className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]"
+                >
+                  UAE ID
+                </Label>
+                <Input
+                  id="uaeId"
+                  {...register("uaeId")}
+                  disabled
+                  placeholder="1234567890"
+                  className="rounded-[4px] border-[#A8A29E] bg-[#EDE9E3]"
+                />
+              </div>
+            </div>
+
+            {/* Email (disabled) */}
+            <div className="flex flex-col gap-1">
+              <Label
+                htmlFor="email"
+                className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]"
+              >
+                Email
+              </Label>
+              <Input
+                id="email"
+                {...register("email")}
+                disabled
+                className="rounded-[4px] border-[#A8A29E] bg-[#EDE9E3]"
+              />
+            </div>
+
+            {/* Phone Number */}
+            <div className="flex flex-col gap-1">
+              <Label
+                htmlFor="phone"
+                className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]"
+              >
+                Phone Number
+              </Label>
+              <div className="flex">
+                <div className="flex h-[48px] w-[106px] shrink-0 items-center gap-2 rounded-l-lg border border-[#A8A29E] px-3">
+                  <span className="text-base">🇦🇪</span>
+                  <span className="font-new-sans text-[#44403C] text-sm">
+                    +971
+                  </span>
+                </div>
+                <Input
+                  id="phone"
+                  {...register("phone")}
+                  disabled
+                  className="rounded-[4px] rounded-r-lg rounded-l-none border-[#A8A29E] bg-[#EDE9E3]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex gap-2 p-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="default"
+              loading={isPending}
+              disabled={isPending}
+              className="flex-1"
+            >
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

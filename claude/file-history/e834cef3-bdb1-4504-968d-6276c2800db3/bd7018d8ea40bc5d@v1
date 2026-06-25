@@ -1,0 +1,186 @@
+"use client";
+
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { cn } from "@/shared/lib/ui/cn";
+import Image from "next/image";
+import Link from "next/link";
+import type { FC } from "react";
+
+interface FooterProps {
+  className?: string;
+}
+
+const SOCIAL_LINKS = [
+  {
+    id: "tiktok",
+    label: "TikTok",
+    href: "https://tiktok.com/@luxflow",
+    icon: "/new-design-images/icons/tiktok.svg",
+  },
+  {
+    id: "instagram",
+    label: "Instagram",
+    href: "https://instagram.com/luxflow",
+    icon: "/new-design-images/icons/instagram.svg",
+  },
+  {
+    id: "whatsapp",
+    label: "WhatsApp",
+    href: "https://wa.me/971542739213",
+    icon: "/new-design-images/icons/whatsup.svg",
+  },
+];
+
+const FOOTER_NAV = [
+  { label: "About LuxFlow", href: APP_ROUTES.APP.ABOUT },
+  { label: "Our Method", href: APP_ROUTES.SERVICES.OUR_METHOD },
+  { label: "Contact Us", href: APP_ROUTES.APP.CONTACT },
+  { label: "Support", href: "/support" },
+  { label: "FAQs", href: APP_ROUTES.APP.FAQ },
+];
+
+export const Footer: FC<FooterProps> = ({ className }) => {
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <footer className={cn("new-design relative w-full", className)}>
+      <div className="relative z-10 border-border border-t bg-background pt-10 min-[1172px]:pt-16">
+        <div className="mx-auto max-w-[1720px] px-6 pb-12 min-[1172px]:px-16 min-[1172px]:pb-20">
+          <div className="flex flex-col gap-10 min-[1172px]:grid min-[1172px]:grid-cols-3 min-[1172px]:items-center min-[1172px]:gap-12">
+            <div className="flex flex-col gap-10 min-[1172px]:order-1 min-[1172px]:gap-8">
+              <div className="flex justify-start min-[1172px]:hidden">
+                <LogoImage className="h-[100px] w-[116px]" />
+              </div>
+
+              <h2 className="font-extralight font-new-serif text-4xl tracking-tight">
+                Contact
+              </h2>
+
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-wrap items-center gap-4">
+                  {SOCIAL_LINKS.map((social) => (
+                    <a
+                      className="flex items-center gap-2 text-sm transition-opacity hover:opacity-70"
+                      href={social.href}
+                      key={social.id}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      <Image
+                        alt={`Social Link Icon ${social.label}`}
+                        aria-hidden="true"
+                        height={16}
+                        src={social.icon}
+                        width={16}
+                      />
+                      <span>{social.label}</span>
+                    </a>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-4 text-sm leading-relaxed">
+                  <address className="not-italic">
+                    Al Noor Business Center, Office 1203,
+                    <br />
+                    Baniyas Road, Deira, Dubai, UAE
+                    <br />
+                    P.O. Box: 123456
+                  </address>
+                  <div className="flex flex-col gap-1">
+                    <a className="hover:underline" href="tel:+971542739213">
+                      +971 54 273 9213
+                    </a>
+                    <a
+                      className="hover:underline"
+                      href="mailto:contact@luxflow.com"
+                    >
+                      contact@luxflow.com
+                    </a>
+                  </div>
+                </div>
+
+                {/* <Button
+                  className="flex h-[38px] w-[70px] items-center gap-2 rounded-xl border-[#D1D1D1] px-4 py-2 text-sm"
+                  variant="outline"
+                >
+                  EN <ChevronDownIcon size={14} />
+                </Button> */}
+
+                <div className="flex flex-col gap-4 font-new-sans text-sm min-[1172px]:flex-row min-[1172px]:items-center min-[1172px]:gap-6">
+                  <span className="whitespace-nowrap">
+                    © {currentYear} LuxFlow
+                  </span>
+
+                  <div className="flex flex-col gap-4 min-[1172px]:flex-row min-[1172px]:gap-6">
+                    <Link
+                      className="whitespace-nowrap underline transition-colors hover:text-foreground"
+                      href={APP_ROUTES.APP.TERMS}
+                    >
+                      Terms & Conditions
+                    </Link>
+                    <Link
+                      className="whitespace-nowrap underline transition-colors hover:text-foreground"
+                      href={APP_ROUTES.APP.POLICY}
+                    >
+                      Privacy Policy
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden justify-center min-[1172px]:order-2 min-[1172px]:flex">
+              <LogoImage className="h-[148px] w-[172px]" />
+            </div>
+
+            <div className="h-[1px] w-full bg-[#D6D3D1] min-[1172px]:hidden" />
+
+            <nav className="flex flex-col gap-10 font-extralight font-new-serif text-3xl min-[1172px]:order-3 min-[1172px]:items-end min-[1172px]:gap-12 min-[1172px]:text-right">
+              {FOOTER_NAV.map((link) => (
+                <Link
+                  className="min-[1172px]:hover:-translate-x-2 transition-transform duration-200 hover:translate-x-2"
+                  href={link.href}
+                  key={link.href}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
+      </div>
+
+      <div className="sticky bottom-0 z-0 w-full overflow-hidden bg-[#0b113b]">
+        <div className="relative aspect-[531/412] w-full min-[1172px]:aspect-[1720/274]">
+          <Image
+            alt="Short Footer"
+            className="object-contain min-[1172px]:hidden"
+            fill
+            priority
+            sizes="100vw"
+            src="/new-design-images/short-footer.webp"
+          />
+          <Image
+            alt="Long Footer"
+            className="hidden object-contain min-[1172px]:block"
+            fill
+            priority
+            sizes="100vw"
+            src="/new-design-images/long-footer.webp"
+          />
+        </div>
+      </div>
+    </footer>
+  );
+};
+
+const LogoImage = ({ className }: { className: string }) => (
+  <div className={cn("relative", className)}>
+    <Image
+      alt="LuxFlow Logo"
+      className="object-contain"
+      fill
+      src="/new-design-images/gray-logo.png"
+    />
+  </div>
+);

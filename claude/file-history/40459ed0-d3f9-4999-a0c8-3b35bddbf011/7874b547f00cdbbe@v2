@@ -1,0 +1,90 @@
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  ApiExtraModels,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+
+import { UserRole } from '@/db';
+import { Protected } from '@/modules/auth';
+import { ContextService } from '@/modules/global';
+import {
+  NOWPaymentsCheckoutService,
+  NOWPaymentsService,
+} from '@/modules/nowpayments';
+
+import {
+  CreateNOWPaymentsCheckoutSessionDto,
+  NOWPaymentsCheckoutSessionResponseDto,
+  NOWPaymentsCurrenciesResponseDto,
+} from './dtos';
+
+const CURRENCIES_ALLOWLIST = [
+  'usdttrc20',
+  'usdterc20',
+  'usdc',
+  'usdtsol',
+  'usdcsol',
+  'usdtpol',
+  'usdcpol',
+  'usdtop',
+  'usdcop',
+  'usdtarb',
+  'usdcarb',
+  'usdtbase',
+  'usdcbase',
+];
+
+@ApiTags('App / NOWPayments Checkout')
+@ApiExtraModels(
+  NOWPaymentsCheckoutSessionResponseDto,
+  NOWPaymentsCurrenciesResponseDto,
+)
+@Controller()
+@Protected([UserRole.Bidder, UserRole.Seller, UserRole.Retailer])
+export class NOWPaymentsCheckoutController {
+  constructor(
+    private readonly nowpaymentsCheckoutService: NOWPaymentsCheckoutService,
+    private readonly nowpaymentsService: NOWPaymentsService,
+    private readonly contextService: ContextService,
+  ) {}
+
+  @Get('/currencies')
+  @ApiOperation({ summary: 'Get available cryptocurrencies' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of available cryptocurrencies',
+    type: NOWPaymentsCurrenciesResponseDto,
+  })
+  async getCurrencies(): Promise<NOWPaymentsCurrenciesResponseDto> {
+    const available = await this.nowpaymentsService.getCurrencies();
+    const availableSet = new Set(available);
+    const currencies = CURRENCIES_ALLOWLIST.filter((c) => availableSet.has(c));
+    return { currencies };
+  }
+
+  @Post('/')
+  async createCheckoutSession(
+    @Body() body: CreateNOWPaymentsCheckoutSessionDto,
+  ): Promise<NOWPaymentsCheckoutSessionResponseDto> {
+    const userId = this.contextService.context.user.id;
+
+    const result = await this.nowpaymentsCheckoutService.createCheckoutSession(
+      userId,
+      body.paymentId,
+      body.payCurrency,
+    );
+
+    return {
+      paymentId: result.paymentId.toString(),
+      payAddress: result.paymentAddress,
+      payAmount: result.payAmount,
+      payCurrency: result.payCurrency,
+      priceAmount: result.priceAmount,
+      priceCurrency: result.priceCurrency,
+      expirationEstimateDate: result.expirationEstimateDate,
+      paymentLink: `https://nowpayments.io/payment/?iid=${result.paymentId}`,
+    };
+  }
+}

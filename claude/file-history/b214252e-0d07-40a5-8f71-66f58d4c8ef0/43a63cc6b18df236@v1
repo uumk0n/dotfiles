@@ -1,0 +1,79 @@
+"use client";
+
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { SidebarProvider } from "@/shared/contexts/sidebar-context";
+import { AuthenticatedHeader } from "@/widgets/authenticated-header";
+import { Footer } from "@/widgets/footer";
+import { Header } from "@/widgets/header";
+import { usePathname } from "next/navigation";
+import type { FC, ReactNode } from "react";
+import { useState } from "react";
+
+interface AuthenticatedLayoutProps {
+  children: ReactNode;
+}
+
+const NEW_DESIGN_ROUTES = [
+  "/wallet",
+  APP_ROUTES.PROFILE,
+  "/my-deals",
+  "/buyback-requests/create",
+  "/buyback-requests",
+  "/buybacks",
+  "/tickets",
+  "/support",
+  "/welcome",
+];
+
+const NO_FOOTER_ROUTES = ["/welcome"];
+
+export const AuthenticatedLayout: FC<AuthenticatedLayoutProps> = ({
+  children,
+}) => {
+  const pathname = usePathname();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const isNewDesign =
+    NEW_DESIGN_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`),
+    ) ||
+    (pathname.startsWith("/buybacks/") && pathname.endsWith("/pay"));
+
+  const showFooter = !NO_FOOTER_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
+  if (isNewDesign) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <div
+          className="new-design -z-50 fixed top-0 left-0 min-h-screen w-full bg-background"
+          id="background"
+        />
+        <Header />
+        <main className="flex-1">
+          <div className="mx-auto my-[62px] max-w-[1720px] px-4 min-[1172px]:px-10 min-[1172px]:py-8">
+            {children}
+          </div>
+        </main>
+        {showFooter && <Footer />}
+      </div>
+    );
+  }
+
+  return (
+    <SidebarProvider
+      value={{
+        onMenuClick: () => setIsSidebarOpen(true),
+        isOpen: isSidebarOpen,
+        setIsOpen: setIsSidebarOpen,
+      }}
+    >
+      <div className="flex min-h-screen flex-col">
+        {isNewDesign ? <Header /> : <AuthenticatedHeader />}
+        <main className="my-20 flex-1">{children}</main>
+        {isNewDesign && <Footer />}
+      </div>
+    </SidebarProvider>
+  );
+};

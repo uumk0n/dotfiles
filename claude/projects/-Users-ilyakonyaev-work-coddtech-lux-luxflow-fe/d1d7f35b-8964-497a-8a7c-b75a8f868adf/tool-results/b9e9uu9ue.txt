@@ -1,0 +1,1322 @@
+diff --git a/app/(app)/(protected)/wallet/page.tsx b/app/(app)/(protected)/wallet/page.tsx
+index 13bff3c..a69489b 100644
+--- a/app/(app)/(protected)/wallet/page.tsx
++++ b/app/(app)/(protected)/wallet/page.tsx
+@@ -116,7 +116,7 @@ const DepositFundsModal = dynamic(
+ 
+ function maskEmail(email: string): string {
+   const [local, domain] = email.split("@");
+-  if (!local || !domain) return email;
++  if (!(local && domain)) return email;
+   return `${local[0]}***@${domain}`;
+ }
+ 
+@@ -138,7 +138,7 @@ function SectionCard({
+   children: React.ReactNode;
+ }) {
+   return (
+-    <div className={`flex flex-col gap-8 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] px-6 pt-8 pb-6${disabled ? " pointer-events-none opacity-50" : ""}`}>
++    <div className={`flex flex-col gap-8 rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] px-6 pt-8 pb-6${disabled ? "pointer-events-none opacity-50" : ""}`}>
+       <div className="flex flex-wrap items-start justify-between gap-4">
+         <div className="flex flex-1 flex-col gap-1">
+           <h2 className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+diff --git a/app/(auth)/sign-in/page.tsx b/app/(auth)/sign-in/page.tsx
+index e2d65d9..4f77ad6 100644
+--- a/app/(auth)/sign-in/page.tsx
++++ b/app/(auth)/sign-in/page.tsx
+@@ -3,7 +3,8 @@
+ import { zodResolver } from "@hookform/resolvers/zod";
+ import { signIn } from "next-auth/react";
+ import Link from "next/link";
+-import { useEffect, useState } from "react";
++import Script from "next/script";
++import { useEffect, useRef, useState } from "react";
+ import { useForm } from "react-hook-form";
+ import { z } from "zod";
+ 
+@@ -29,6 +30,23 @@ const loginSchema = z.object({
+ 
+ type LoginFormData = z.infer<typeof loginSchema>;
+ 
++type GoogleAccountsId = {
++  initialize: (config: {
++    client_id: string | undefined;
++    callback: (response: { credential: string }) => void;
++  }) => void;
++  renderButton: (
++    container: HTMLElement,
++    options: { type: string; theme: string; size: string; width: number },
++  ) => void;
++};
++
++declare global {
++  interface Window {
++    google?: { accounts?: { id?: GoogleAccountsId } };
++  }
++}
++
+ function GoogleIcon() {
+   return (
+     <svg
+@@ -83,15 +101,12 @@ function UaePassIcon() {
+   );
+ }
+ 
+-const SOCIAL_BUTTONS = [
+-  { key: "google", Icon: GoogleIcon, label: "Google" },
+-  { key: "apple", Icon: AppleIcon, label: "Apple" },
+-  { key: "uaepass", Icon: UaePassIcon, label: "UAE Pass" },
+-];
+-
+ export default function SignInPage() {
+   const [isLoading, setIsLoading] = useState(false);
++  const [googleLoading, setGoogleLoading] = useState(false);
+   const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
++  const googleBtnRef = useRef<HTMLDivElement>(null);
++  const googleInitialized = useRef(false);
+ 
+   useEffect(() => {
+     if (!getIsClient()) return;
+@@ -99,6 +114,50 @@ export default function SignInPage() {
+     setCallbackUrl(params.get("callbackUrl"));
+   }, []);
+ 
++  const handleGoogleCredential = async (response: { credential: string }) => {
++    setGoogleLoading(true);
++    try {
++      const result = await signIn("google-oauth", {
++        idToken: response.credential,
++        redirect: false,
++      });
++
++      if (result?.ok) {
++        const params = new URLSearchParams(window.location.search);
++        hardPush(params.get("callbackUrl") || APP_ROUTES.APP.MY_DEALS);
++      } else {
++        toast.error("Google Sign In Failed", {
++          description: "Please try again",
++        });
++        setGoogleLoading(false);
++      }
++    } catch {
++      toast.error("Google Sign In Failed", {
++        description: "An unexpected error occurred",
++      });
++      setGoogleLoading(false);
++    }
++  };
++
++  const initGoogleButton = () => {
++    const google = window.google;
++    if (!google?.accounts?.id || !googleBtnRef.current || googleInitialized.current) return;
++
++    googleInitialized.current = true;
++
++    google.accounts.id.initialize({
++      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
++      callback: handleGoogleCredential,
++    });
++
++    google.accounts.id.renderButton(googleBtnRef.current, {
++      type: "standard",
++      theme: "outline",
++      size: "large",
++      width: googleBtnRef.current.offsetWidth || 200,
++    });
++  };
++
+   const form = useForm<LoginFormData>({
+     resolver: zodResolver(loginSchema),
+     defaultValues: { email: "", password: "" },
+@@ -133,124 +192,153 @@ export default function SignInPage() {
+   };
+ 
+   return (
+-    <div className="flex w-full flex-col gap-5">
+-      {/* Header */}
+-      <div className="flex flex-col">
+-        <h1 className="font-light font-new-serif text-xl text-[#44403C] leading-[140%]">
+-          Welcome Back
+-        </h1>
+-        <p className="font-new-sans text-[#44403C] text-sm leading-[150%] tracking-[-0.01em]">
+-          Login to your account to access LuxFlow
+-        </p>
+-      </div>
++    <>
++      <Script
++        src="https://accounts.google.com/gsi/client"
++        strategy="afterInteractive"
++        onLoad={initGoogleButton}
++      />
++      <div className="flex w-full flex-col gap-5">
++        {/* Header */}
++        <div className="flex flex-col">
++          <h1 className="font-light font-new-serif text-[#44403C] text-xl leading-[140%]">
++            Welcome Back
++          </h1>
++          <p className="font-new-sans text-[#44403C] text-sm leading-[150%] tracking-[-0.01em]">
++            Login to your account to access LuxFlow
++          </p>
++        </div>
+ 
+-      {/* Social Buttons */}
+-      <div className="flex flex-col gap-2 sm:flex-row">
+-        {SOCIAL_BUTTONS.map(({ key, Icon, label }) => (
++        {/* Social Buttons */}
++        <div className="flex flex-col gap-2 sm:flex-row">
++          {/* Google — overlay approach */}
++          <div className="relative h-12 w-full sm:flex-1">
++            <div className="pointer-events-none flex h-12 w-full items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em]">
++              <GoogleIcon />
++              <span className="whitespace-nowrap">
++                {googleLoading ? "..." : "Google"}
++              </span>
++            </div>
++            <div
++              ref={googleBtnRef}
++              className="absolute inset-0 overflow-hidden opacity-0"
++            />
++          </div>
++
++          {/* Apple — disabled */}
+           <button
+-            key={key}
+             type="button"
+             disabled
+             className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em] opacity-70 sm:flex-1"
+           >
+-            <Icon />
+-            <span className="whitespace-nowrap">{label}</span>
++            <AppleIcon />
++            <span className="whitespace-nowrap">Apple</span>
+           </button>
+-        ))}
+-      </div>
+-
+-      {/* Form Section */}
+-      <div className="flex flex-col gap-5">
+-        {/* OR Divider */}
+-        <div className="flex items-center gap-4">
+-          <div className="flex-1 border-[#D6D3D1] border-t" />
+-          <span className="font-bold font-new-sans text-[#A8A29E] text-sm tracking-[-0.01em]">
+-            OR
+-          </span>
+-          <div className="flex-1 border-[#D6D3D1] border-t" />
+-        </div>
+ 
+-        <Form {...form}>
+-          <form
+-            onSubmit={form.handleSubmit(onSubmit)}
+-            className="flex flex-col gap-5"
++          {/* UAE Pass — disabled */}
++          <button
++            type="button"
++            disabled
++            className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em] opacity-70 sm:flex-1"
+           >
+-            <div className="flex flex-col gap-2">
+-              {/* Email */}
+-              <FormField
+-                control={form.control}
+-                name="email"
+-                render={({ field }) => (
+-                  <FormItem>
+-                    <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+-                      Email
+-                    </FormLabel>
+-                    <FormControl>
+-                      <Input
+-                        placeholder="Enter your email"
+-                        type="email"
+-                        className="h-12 rounded-[4px] border-[#A8A29E] bg-[#F5F3EF] px-3 font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
+-                        {...field}
+-                      />
+-                    </FormControl>
+-                    <FormMessage />
+-                  </FormItem>
+-                )}
+-              />
++            <UaePassIcon />
++            <span className="whitespace-nowrap">UAE Pass</span>
++          </button>
++        </div>
+ 
+-              {/* Password */}
+-              <FormField
+-                control={form.control}
+-                name="password"
+-                render={({ field }) => (
+-                  <FormItem>
+-                    <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+-                      Password
+-                    </FormLabel>
+-                    <FormControl>
+-                      <PasswordInput
+-                        placeholder="Placeholder"
+-                        containerClassName="h-12 rounded-[4px] border-[#A8A29E] bg-[#F5F3EF] px-3"
+-                        className="font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
+-                        {...field}
+-                      />
+-                    </FormControl>
+-                    <div className="flex justify-end">
+-                      <Link
+-                        href={APP_ROUTES.AUTH.REQUEST_FORGOT_PASSWORD}
+-                        className="font-new-sans text-[#000944] text-xs leading-[130%] transition-opacity hover:opacity-70"
+-                      >
+-                        Forgot Password
+-                      </Link>
+-                    </div>
+-                    <FormMessage />
+-                  </FormItem>
+-                )}
+-              />
+-            </div>
++        {/* Form Section */}
++        <div className="flex flex-col gap-5">
++          {/* OR Divider */}
++          <div className="flex items-center gap-4">
++            <div className="flex-1 border-[#D6D3D1] border-t" />
++            <span className="font-bold font-new-sans text-[#A8A29E] text-sm tracking-[-0.01em]">
++              OR
++            </span>
++            <div className="flex-1 border-[#D6D3D1] border-t" />
++          </div>
+ 
+-            {/* Login Button */}
+-            <button
+-              type="submit"
+-              disabled={isLoading}
+-              className="flex h-12 w-full items-center justify-center rounded-[4px] bg-[#021171] font-medium font-new-sans text-[#F5F3EF] text-base transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
++          <Form {...form}>
++            <form
++              onSubmit={form.handleSubmit(onSubmit)}
++              className="flex flex-col gap-5"
+             >
+-              {isLoading ? "Signing In..." : "Login"}
+-            </button>
++              <div className="flex flex-col gap-2">
++                {/* Email */}
++                <FormField
++                  control={form.control}
++                  name="email"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
++                        Email
++                      </FormLabel>
++                      <FormControl>
++                        <Input
++                          placeholder="Enter your email"
++                          type="email"
++                          className="h-12 rounded-[4px] border-[#A8A29E] bg-[#F5F3EF] px-3 font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
++                          {...field}
++                        />
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                {/* Password */}
++                <FormField
++                  control={form.control}
++                  name="password"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
++                        Password
++                      </FormLabel>
++                      <FormControl>
++                        <PasswordInput
++                          placeholder="Placeholder"
++                          containerClassName="h-12 rounded-[4px] border-[#A8A29E] bg-[#F5F3EF] px-3"
++                          className="font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
++                          {...field}
++                        />
++                      </FormControl>
++                      <div className="flex justify-end">
++                        <Link
++                          href={APP_ROUTES.AUTH.REQUEST_FORGOT_PASSWORD}
++                          className="font-new-sans text-[#000944] text-xs leading-[130%] transition-opacity hover:opacity-70"
++                        >
++                          Forgot Password
++                        </Link>
++                      </div>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++              </div>
+ 
+-            {/* Sign up link */}
+-            <p className="text-center font-new-sans text-[#44403C] text-sm leading-[150%] tracking-[-0.01em]">
+-              New to LuxFlow.{" "}
+-              <Link
+-                href={APP_ROUTES.AUTH.REGISTER}
+-                className="font-semibold text-[#44403C] hover:opacity-70"
++              {/* Login Button */}
++              <button
++                type="submit"
++                disabled={isLoading}
++                className="flex h-12 w-full items-center justify-center rounded-[4px] bg-[#021171] font-medium font-new-sans text-[#F5F3EF] text-base transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+               >
+-                Create an Account
+-              </Link>
+-            </p>
+-          </form>
+-        </Form>
++                {isLoading ? "Signing In..." : "Login"}
++              </button>
++
++              {/* Sign up link */}
++              <p className="text-center font-new-sans text-[#44403C] text-sm leading-[150%] tracking-[-0.01em]">
++                New to LuxFlow.{" "}
++                <Link
++                  href={APP_ROUTES.AUTH.REGISTER}
++                  className="font-semibold text-[#44403C] hover:opacity-70"
++                >
++                  Create an Account
++                </Link>
++              </p>
++            </form>
++          </Form>
++        </div>
+       </div>
+-    </div>
++    </>
+   );
+ }
+diff --git a/src/entities/auth/api/dto/auth.dto.ts b/src/entities/auth/api/dto/auth.dto.ts
+index d0bb6a1..5e345ec 100644
+--- a/src/entities/auth/api/dto/auth.dto.ts
++++ b/src/entities/auth/api/dto/auth.dto.ts
+@@ -57,7 +57,7 @@ export const CONFIRM_FORGOT_PASSWORD_DTO_SCHEMA = z.object({
+ export const AUTH_TOKENS_SCHEMA = z.object({
+   accessToken: z.string(),
+   refreshToken: z.string(),
+-  idToken: z.string(),
++  idToken: z.string().optional().default(""),
+ });
+ 
+ export const SIGN_IN_SUCCESS_RESPONSE_SCHEMA = z.object({
+diff --git a/src/entities/auth/api/services.ts b/src/entities/auth/api/services.ts
+index ef764b8..82283c6 100644
+--- a/src/entities/auth/api/services.ts
++++ b/src/entities/auth/api/services.ts
+@@ -6,6 +6,8 @@ import type {
+   ConfirmForgotPasswordResponse,
+   ForgotPasswordRequest,
+   ForgotPasswordResponse,
++  OAuthAppleRequest,
++  OAuthGoogleRequest,
+   OtpEntity,
+   RefreshTokenRequest,
+   RefreshTokenResponse,
+@@ -116,3 +118,21 @@ export async function checkPhoneExists(
+ 
+   return response.data;
+ }
++
++export async function oauthGoogle(
++  data: OAuthGoogleRequest,
++): Promise<SignInResponse> {
++  const api = await getApi();
++  const response = await api.post(API_ROUTES.AUTH.OAUTH_GOOGLE, data);
++
++  return SIGN_IN_RESPONSE_SCHEMA.parse(response.data);
++}
++
++export async function oauthApple(
++  data: OAuthAppleRequest,
++): Promise<SignInResponse> {
++  const api = await getApi();
++  const response = await api.post(API_ROUTES.AUTH.OAUTH_APPLE, data);
++
++  return SIGN_IN_RESPONSE_SCHEMA.parse(response.data);
++}
+diff --git a/src/entities/profile/api/services.ts b/src/entities/profile/api/services.ts
+index 05439aa..61d6d09 100644
+--- a/src/entities/profile/api/services.ts
++++ b/src/entities/profile/api/services.ts
+@@ -22,16 +22,18 @@ export async function getProfile(): Promise<Profile> {
+ export async function getProfileWithToken(
+   accessToken: string,
+ ): Promise<Profile> {
+-  const api = await getApi();
+-
+-  const response = await api.get<Profile>(API_ROUTES.PROFILE.GET, {
+-    baseURL: ENV.NEXT_PUBLIC_APP_API_URL,
++  const url = `${ENV.NEXT_PUBLIC_APP_API_URL}${API_ROUTES.PROFILE.GET}`;
++  const response = await fetch(url, {
+     headers: {
+       Authorization: `Bearer ${accessToken}`,
+     },
+   });
+ 
+-  return response.data;
++  if (!response.ok) {
++    throw new Error(`Failed to fetch profile: ${response.status}`);
++  }
++
++  return response.json() as Promise<Profile>;
+ }
+ 
+ export async function getAddresses(): Promise<Address[]> {
+diff --git a/src/pages-layer/profile/ui/profile-page.tsx b/src/pages-layer/profile/ui/profile-page.tsx
+index 4a7e3ac..4dd7c9f 100644
+--- a/src/pages-layer/profile/ui/profile-page.tsx
++++ b/src/pages-layer/profile/ui/profile-page.tsx
+@@ -30,7 +30,9 @@ import { KycRedirectHandler } from "@/shared/lib/kyc-redirect";
+ import { cn } from "@/shared/lib/utils";
+ import { getFullName } from "@/shared/lib/utils/get-full-name";
+ import { useCurrencyStore } from "@/shared/model/currency-store";
++import { AppleIcon } from "@/shared/ui/icons/apple-icon";
+ import { GoogleIcon } from "@/shared/ui/icons/google-icon";
++import { UaePassIcon } from "@/shared/ui/icons/uae-pass-icon";
+ import { UserAvatar } from "@/shared/ui/user-avatar/user-avatar";
+ import { toast } from "@/shared/ui/notification";
+ import { Button } from "@/shared/ui/shadcn/button";
+@@ -39,7 +41,6 @@ import { KycStatusSection } from "@/widgets/kyc-status-section";
+ import {
+   BellRing,
+   ChevronDown,
+-  KeyRound,
+   MapPinHouse,
+   RefreshCw,
+   ShieldAlert,
+@@ -398,11 +399,7 @@ export function ProfilePage() {
+     setIsAddressModalOpen(true);
+   }
+ 
+-  // Determine auth provider from idToken prefix / session provider field
+-  const isGoogleAuth = (() => {
+-    const idToken = session?.idToken ?? "";
+-    return idToken.toLowerCase().includes("google");
+-  })();
++  const authProvider = session?.provider;
+ 
+   if (!profile) return null;
+ 
+@@ -442,18 +439,36 @@ export function ProfilePage() {
+ 
+           {/* Auth provider row + Name + UID */}
+           <div className="flex flex-col gap-3 rounded-xl border border-[#E7E5E4] bg-[#EDE9E3] px-5 py-[28px]">
+-            <div className="flex items-center gap-1.5">
+-              {isGoogleAuth ? (
+-                <GoogleIcon className="h-3.5 w-3.5" />
+-              ) : (
+-                <KeyRound className="h-3.5 w-3.5 text-[#A8A29E]" />
+-              )}
+-              <span className="font-new-sans text-base leading-[150%] tracking-[-1%]">
+-                {isGoogleAuth ? "Google" : "Full name"}
+-              </span>
+-            </div>
++            {authProvider && authProvider !== "credentials" && (
++              <div className="flex items-center gap-2">
++                {authProvider === "google-oauth" && (
++                  <>
++                    <GoogleIcon className="h-5 w-5" />
++                    <span className="font-medium font-new-sans text-sm leading-[150%] tracking-[-1%]">
++                      Google
++                    </span>
++                  </>
++                )}
++                {authProvider === "apple" && (
++                  <>
++                    <AppleIcon className="h-5 w-5" />
++                    <span className="font-medium font-new-sans text-sm leading-[150%] tracking-[-1%]">
++                      Apple
++                    </span>
++                  </>
++                )}
++                {authProvider === "uae-pass" && (
++                  <>
++                    <UaePassIcon className="h-5 w-5" />
++                    <span className="font-medium font-new-sans text-sm leading-[150%] tracking-[-1%]">
++                      UAE Pass
++                    </span>
++                  </>
++                )}
++              </div>
++            )}
+             <div className="flex items-center justify-between gap-2">
+-              <span className="font-light font-new-serif text-[#44403C] text-2xl leading-[120%]">
++              <span className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+                 {getFullName(profile)}
+               </span>
+               <span className="rounded-sm bg-[#ECFDF5] px-2 py-0.5 font-new-sans text-[#047857] text-xs">
+diff --git a/src/shared/config/api-routes.ts b/src/shared/config/api-routes.ts
+index a8c454e..fad252d 100644
+--- a/src/shared/config/api-routes.ts
++++ b/src/shared/config/api-routes.ts
+@@ -11,6 +11,8 @@ export const API_ROUTES = {
+     CONFIRM_FORGOT_PASSWORD: "/auth/confirm-forgot-password",
+     EMAIL_EXISTS: "/auth/email-exists",
+     PHONE_EXISTS: "/auth/phone-exists",
++    OAUTH_GOOGLE: "/auth/oauth/google",
++    OAUTH_APPLE: "/auth/oauth/apple",
+   },
+ 
+   USERS: {
+diff --git a/src/shared/config/auth-config.ts b/src/shared/config/auth-config.ts
+index 63884d5..7299542 100644
+--- a/src/shared/config/auth-config.ts
++++ b/src/shared/config/auth-config.ts
+@@ -2,7 +2,7 @@ import type { NextAuthOptions, User } from "next-auth";
+ import type { JWT } from "next-auth/jwt";
+ import CredentialsProvider from "next-auth/providers/credentials";
+ 
+-import { signIn } from "@/entities/auth/api/services";
++import { oauthGoogle, signIn } from "@/entities/auth/api/services";
+ import { getProfileWithToken } from "@/entities/profile/api/services";
+ import { calculateExpiresIn } from "@/shared/lib/auth";
+ import type { RefreshTokenResponse } from "@/shared/types/auth.types";
+@@ -73,6 +73,54 @@ export const authConfig: NextAuthOptions = {
+         }
+       },
+     }),
++    CredentialsProvider({
++      id: "google-oauth",
++      name: "Google",
++      credentials: {
++        idToken: { label: "ID Token", type: "text" },
++      },
++      authorize: async (credentials): Promise<null | User> => {
++        if (!credentials?.idToken) return null;
++
++        try {
++          const response = await oauthGoogle({ idToken: credentials.idToken });
++
++          if (response.status === "SUCCESS") {
++            const { payload } = response;
++
++            // Decode Google id_token to get basic user info as fallback
++            const googlePayload = JSON.parse(
++              Buffer.from(
++                credentials.idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"),
++                "base64",
++              ).toString(),
++            ) as { sub?: string; email?: string };
++
++            let profile;
++            try {
++              profile = await getProfileWithToken(payload.accessToken);
++            } catch {
++              // Profile endpoint not yet available for OAuth tokens
++            }
++
++            return {
++              id: profile?.id ?? googlePayload.sub ?? "",
++              email: profile?.email ?? googlePayload.email ?? "",
++              accessToken: payload.accessToken,
++              refreshToken: payload.refreshToken,
++              idToken: payload.idToken || "",
++              refreshTokenExpiresAt: Date.now() + REFRESH_TOKEN_EXPIRATION_TIME,
++              profile,
++            };
++          }
++
++          return null;
++        } catch (error) {
++          console.error("Google OAuth error:", error);
++          return null;
++        }
++      },
++    }),
+   ],
+ 
+   callbacks: {
+@@ -97,6 +145,7 @@ export const authConfig: NextAuthOptions = {
+         token.profile = user.profile;
+         token.isTemporaryPassword = user.isTemporaryPassword;
+         token.tempPasswordSession = user.tempPasswordSession;
++        token.provider = account.provider;
+       }
+ 
+       const expiresIn = calculateExpiresIn(token.accessToken);
+@@ -126,6 +175,7 @@ export const authConfig: NextAuthOptions = {
+         session.session = token.session;
+         session.isTemporaryPassword = token.isTemporaryPassword;
+         session.tempPasswordSession = token.tempPasswordSession;
++        session.provider = token.provider;
+         session.user = {
+           id: token.id,
+           email: token.email,
+diff --git a/src/shared/config/env.ts b/src/shared/config/env.ts
+index 58caa23..e35b554 100644
+--- a/src/shared/config/env.ts
++++ b/src/shared/config/env.ts
+@@ -22,6 +22,7 @@ export const ENV = createEnv({
+       1,
+       "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is missed",
+     ),
++    NEXT_PUBLIC_GOOGLE_CLIENT_ID: string().optional(),
+   },
+   experimental__runtimeEnv: {
+     NEXT_PUBLIC_APP_API_URL: process.env.NEXT_PUBLIC_APP_API_URL,
+@@ -30,5 +31,6 @@ export const ENV = createEnv({
+     NEXT_PUBLIC_ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT,
+     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
+       process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
++    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+   },
+ });
+diff --git a/src/shared/types/auth.types.ts b/src/shared/types/auth.types.ts
+index 7720671..929fb5b 100644
+--- a/src/shared/types/auth.types.ts
++++ b/src/shared/types/auth.types.ts
+@@ -212,3 +212,13 @@ export interface RefreshTokenResponse {
+   refreshToken: string;
+   idToken: string;
+ }
++
++export interface OAuthGoogleRequest {
++  idToken: string;
++}
++
++export interface OAuthAppleRequest {
++  identityToken: string;
++  firstName?: string;
++  lastName?: string;
++}
+diff --git a/src/shared/types/next-auth.d.ts b/src/shared/types/next-auth.d.ts
+index ae39c60..f906999 100644
+--- a/src/shared/types/next-auth.d.ts
++++ b/src/shared/types/next-auth.d.ts
+@@ -11,6 +11,7 @@ declare module "next-auth" {
+     session?: string;
+     isTemporaryPassword?: boolean;
+     tempPasswordSession?: string;
++    provider?: string;
+     user: {
+       id: string;
+       email: string;
+@@ -44,5 +45,6 @@ declare module "next-auth/jwt" {
+     profile?: Profile;
+     isTemporaryPassword?: boolean;
+     tempPasswordSession?: string;
++    provider?: string;
+   }
+ }
+diff --git a/src/shared/ui/shadcn/tabs.tsx b/src/shared/ui/shadcn/tabs.tsx
+index 94ab3fb..d818bb0 100644
+--- a/src/shared/ui/shadcn/tabs.tsx
++++ b/src/shared/ui/shadcn/tabs.tsx
+@@ -29,7 +29,7 @@ const TabsTrigger = React.forwardRef<
+   <TabsPrimitive.Trigger
+     ref={ref}
+     className={cn(
+-      "inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-[4px] px-3 py-3.5 font-new-sans text-sm font-medium leading-[14px] tracking-[-0.16px] transition-all focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
++      "inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-[4px] px-3 py-3.5 font-medium font-new-sans text-sm leading-[14px] tracking-[-0.16px] transition-all focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+       "text-[#44403C]",
+       "data-[state=active]:border data-[state=active]:border-[#D6D3D1] data-[state=active]:bg-[#021171] data-[state=active]:text-[#F5F3EF] data-[state=active]:shadow-sm",
+       className
+diff --git a/src/widgets/add-crypto-address-modal/ui/add-crypto-address-modal.tsx b/src/widgets/add-crypto-address-modal/ui/add-crypto-address-modal.tsx
+index 5dce13c..f3320fe 100644
+--- a/src/widgets/add-crypto-address-modal/ui/add-crypto-address-modal.tsx
++++ b/src/widgets/add-crypto-address-modal/ui/add-crypto-address-modal.tsx
+@@ -21,7 +21,6 @@ import {
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+-  SelectValue,
+ } from "@/shared/ui/shadcn/select";
+ import { Switch } from "@/shared/ui/shadcn/switch";
+ 
+diff --git a/src/widgets/admin-users-role/ui/admin-user-roles-modal.tsx b/src/widgets/admin-users-role/ui/admin-user-roles-modal.tsx
+index 4b8c1e8..b313b6a 100644
+--- a/src/widgets/admin-users-role/ui/admin-user-roles-modal.tsx
++++ b/src/widgets/admin-users-role/ui/admin-user-roles-modal.tsx
+@@ -4,7 +4,6 @@ import type React from "react";
+ import { useEffect, useMemo, useState } from "react";
+ import { toast } from "@/shared/ui/notification";
+ 
+-import { getFullName } from "@/shared/lib/utils/get-full-name";
+ 
+ import {
+   useAdminAdmin,
+diff --git a/src/widgets/admin/admin-extension-summary-section/ui/admin-extension-summary-section.tsx b/src/widgets/admin/admin-extension-summary-section/ui/admin-extension-summary-section.tsx
+index 9d6e59e..2669bff 100644
+--- a/src/widgets/admin/admin-extension-summary-section/ui/admin-extension-summary-section.tsx
++++ b/src/widgets/admin/admin-extension-summary-section/ui/admin-extension-summary-section.tsx
+@@ -50,7 +50,7 @@ export function AdminExtensionSummarySection({
+ 
+           <BuybackExtensionTable extensions={extensions} />
+ 
+-          <div className="hidden flex flex-col gap-[15px]">
++          <div className="flex hidden flex-col gap-[15px]">
+             <div className="flex items-center justify-start gap-1.5">
+               <span className="font-serif text-sm leading-[1.199em]">
+                 Outstanding Amount:
+diff --git a/src/widgets/admin/buyback-actions/ui/buyback-actions.tsx b/src/widgets/admin/buyback-actions/ui/buyback-actions.tsx
+index 96312d1..af9cdb5 100644
+--- a/src/widgets/admin/buyback-actions/ui/buyback-actions.tsx
++++ b/src/widgets/admin/buyback-actions/ui/buyback-actions.tsx
+@@ -1,7 +1,7 @@
+ "use client";
+ 
+ import { useRejectWeeklyExtension } from "@/shared/api/query-hooks/use-admin-buybacks";
+-import {AdminBuybackDetail, BuybackExtensionType} from "@/shared/types/admin-buyback.types";
++import type {AdminBuybackDetail, } from "@/shared/types/admin-buyback.types";
+ import { BuybackStatus } from "@/shared/types/buyback.types";
+ import { Button } from "@/shared/ui/button";
+ import { useState } from "react";
+diff --git a/src/widgets/auth-layout/ui/auth-layout.tsx b/src/widgets/auth-layout/ui/auth-layout.tsx
+index 53f7a7f..5c26e92 100644
+--- a/src/widgets/auth-layout/ui/auth-layout.tsx
++++ b/src/widgets/auth-layout/ui/auth-layout.tsx
+@@ -27,7 +27,7 @@ export const AuthLayout: FC<AuthLayoutProps> = ({ children }) => (
+   <div className="new-design mt-[61px] flex flex-col bg-[#F5F3EF] max-lg:mt-[48px] max-lg:min-h-[calc(100dvh-48px)] lg:h-[calc(100dvh-61px)] lg:overflow-hidden">
+     <Header />
+ 
+-    <div className="relative flex flex-1 flex-col lg:flex-row lg:items-stretch lg:min-h-0">
++    <div className="relative flex flex-1 flex-col lg:min-h-0 lg:flex-row lg:items-stretch">
+       {/* Wave background */}
+       <div className="pointer-events-none absolute inset-0" aria-hidden>
+         <Image
+@@ -110,7 +110,7 @@ export const AuthLayout: FC<AuthLayoutProps> = ({ children }) => (
+       </div>
+ 
+       {/* Right: Form Card */}
+-      <div className="relative z-10 flex flex-1 w-full flex-col items-center px-4 lg:flex-none lg:w-[660px] lg:shrink-0 lg:justify-center lg:overflow-visible lg:px-[120px] lg:py-8">
++      <div className="relative z-10 flex w-full flex-1 flex-col items-center px-4 lg:w-[660px] lg:flex-none lg:shrink-0 lg:justify-center lg:overflow-visible lg:px-[120px] lg:py-8">
+ 
+         {/* Top spacer (mobile only) — grows to push form toward center */}
+         <div className="flex-1 lg:hidden" />
+@@ -121,7 +121,7 @@ export const AuthLayout: FC<AuthLayoutProps> = ({ children }) => (
+         </div>
+ 
+         {/* Bottom spacer with seal (mobile only) — grows equally, min 90px for seal */}
+-        <div className="relative -mr-4 w-[calc(100%+16px)] overflow-hidden [flex:1_0_90px] lg:hidden">
++        <div className="-mr-4 relative w-[calc(100%+16px)] overflow-hidden [flex:1_0_90px] lg:hidden">
+           <div className="pointer-events-none absolute right-[-65px] bottom-[-76px] flex h-[263px] w-[259px] items-center justify-center">
+             <div className="-rotate-[14.89deg] flex-none">
+               <Image
+diff --git a/src/widgets/buyback-details-stepper-new/ui/buyback-details-stepper.tsx b/src/widgets/buyback-details-stepper-new/ui/buyback-details-stepper.tsx
+index 858a1f9..0a3305c 100644
+--- a/src/widgets/buyback-details-stepper-new/ui/buyback-details-stepper.tsx
++++ b/src/widgets/buyback-details-stepper-new/ui/buyback-details-stepper.tsx
+@@ -285,7 +285,7 @@ export const BuybackDetailsStepper = ({
+                       <div className="flex flex-col leading-[120%]">
+                         <span
+                           className={`text-xs ${isActive ? "font-semibold" : ""} ${isActive && isRejected ? "text-[#B91C1C]" : ""}`}
+-                          style={{ color: !isActive && !isCompleted ? "#a8a29e" : undefined }}
++                          style={{ color: (isActive || isCompleted ) ? undefined  : "#a8a29e" }}
+                         >
+                           {step.label}
+                         </span>
+diff --git a/src/widgets/buyback-renew-modal/ui/buyback-renew-modal.tsx b/src/widgets/buyback-renew-modal/ui/buyback-renew-modal.tsx
+index 23742c4..9460f18 100644
+--- a/src/widgets/buyback-renew-modal/ui/buyback-renew-modal.tsx
++++ b/src/widgets/buyback-renew-modal/ui/buyback-renew-modal.tsx
+@@ -112,7 +112,7 @@ function ModalHeader({
+         {title}
+       </h2>
+       {description && (
+-        <p className="font-new-sans text-sm text-secondary-foreground">
++        <p className="font-new-sans text-secondary-foreground text-sm">
+           {description}
+         </p>
+       )}
+@@ -149,10 +149,10 @@ function ConfirmStep({
+           {rows.map((row, index) => (
+             <div key={row.label}>
+               <div className="flex items-center justify-between gap-2 py-2">
+-                <span className="font-new-sans text-sm text-secondary-foreground">
++                <span className="font-new-sans text-secondary-foreground text-sm">
+                   {row.label}
+                 </span>
+-                <span className="font-bold font-new-sans text-sm text-secondary-foreground">
++                <span className="font-bold font-new-sans text-secondary-foreground text-sm">
+                   {row.value}
+                 </span>
+               </div>
+@@ -160,7 +160,7 @@ function ConfirmStep({
+             </div>
+           ))}
+         </div>
+-        <p className="font-new-sans text-sm text-secondary-foreground">
++        <p className="font-new-sans text-secondary-foreground text-sm">
+           Do you want to continue?
+         </p>
+       </div>
+@@ -208,10 +208,10 @@ function PaymentSelectStep({
+ 
+       <div className="flex flex-col gap-4 p-4">
+         <div className="flex items-center justify-between">
+-          <span className="font-new-sans text-sm text-secondary-foreground">
++          <span className="font-new-sans text-secondary-foreground text-sm">
+             Extension fee
+           </span>
+-          <span className="font-bold font-new-sans text-sm text-secondary-foreground">
++          <span className="font-bold font-new-sans text-secondary-foreground text-sm">
+             {formatAmount(extensionFeeCents)}
+           </span>
+         </div>
+@@ -238,10 +238,10 @@ function PaymentSelectStep({
+                 <div className="flex h-6 w-6 items-center justify-center">
+                   {getMethodIcon(entry)}
+                 </div>
+-                <span className="flex-1 font-new-sans text-sm text-secondary-foreground">
++                <span className="flex-1 font-new-sans text-secondary-foreground text-sm">
+                   {getMethodLabel(entry)}
+                 </span>
+-                <span className="font-new-sans text-sm text-muted-foreground">
++                <span className="font-new-sans text-muted-foreground text-sm">
+                   {getMethodIdentifier(entry)}
+                 </span>
+                 <RadioGroupItem
+@@ -325,7 +325,7 @@ function PaymentAddStep({ onCancel }: { onCancel: () => void }) {
+               <span className="font-medium font-new-sans text-base text-secondary-foreground">
+                 {option.label}
+               </span>
+-              <span className="font-new-sans text-sm text-secondary-foreground">
++              <span className="font-new-sans text-secondary-foreground text-sm">
+                 {option.description}
+               </span>
+             </div>
+@@ -366,10 +366,10 @@ function CryptoPendingStep({
+       />
+ 
+       <div className="flex flex-col gap-3 p-4">
+-        <span className="font-new-sans text-sm text-secondary-foreground">
++        <span className="font-new-sans text-secondary-foreground text-sm">
+           Payment address
+         </span>
+-        <div className="break-all rounded-xl border border-border bg-muted/20 p-3 font-new-sans text-sm text-secondary-foreground">
++        <div className="break-all rounded-xl border border-border bg-muted/20 p-3 font-new-sans text-secondary-foreground text-sm">
+           {paymentAddress}
+         </div>
+       </div>
+@@ -409,7 +409,7 @@ function ErrorStep({
+         <h2 className="font-extralight font-new-serif text-2xl text-secondary-foreground">
+           We were not able to process this transaction
+         </h2>
+-        <p className="font-new-sans text-sm text-secondary-foreground">
++        <p className="font-new-sans text-secondary-foreground text-sm">
+           It seems the selected payment method had insufficient funds. Please
+           select a different option to continue.
+         </p>
+@@ -464,7 +464,7 @@ function SuccessStep({
+         <h2 className="font-extralight font-new-serif text-2xl text-secondary-foreground">
+           {title}
+         </h2>
+-        <p className="font-new-sans text-sm text-secondary-foreground">
++        <p className="font-new-sans text-secondary-foreground text-sm">
+           {description ?? `${daysAdded} additional days have been added to your buyback window.`}
+         </p>
+       </div>
+@@ -473,10 +473,10 @@ function SuccessStep({
+         {rows.map((row, index) => (
+           <div key={row.label}>
+             <div className="flex items-center justify-between gap-2 py-2">
+-              <span className="font-new-sans text-sm text-secondary-foreground">
++              <span className="font-new-sans text-secondary-foreground text-sm">
+                 {row.label}
+               </span>
+-              <span className="font-bold font-new-sans text-sm text-secondary-foreground">
++              <span className="font-bold font-new-sans text-secondary-foreground text-sm">
+                 {row.value}
+               </span>
+             </div>
+diff --git a/src/widgets/buyback-upload-form-new/ui/buyback-upload-form.tsx b/src/widgets/buyback-upload-form-new/ui/buyback-upload-form.tsx
+index 51d4af1..fe09590 100644
+--- a/src/widgets/buyback-upload-form-new/ui/buyback-upload-form.tsx
++++ b/src/widgets/buyback-upload-form-new/ui/buyback-upload-form.tsx
+@@ -17,7 +17,7 @@ import {
+ } from "@/shared/ui/shadcn/accordion";
+ import Image from "next/image";
+ import { useRef, useState } from "react";
+-import { CloseOutline, QrCodeOutline } from "react-ionicons";
++import { CloseOutline, } from "react-ionicons";
+ 
+ export interface UploadedFile {
+   fileId: string;
+diff --git a/src/widgets/contact-page/ui/contact-page.tsx b/src/widgets/contact-page/ui/contact-page.tsx
+index fca5eb8..852cf4d 100644
+--- a/src/widgets/contact-page/ui/contact-page.tsx
++++ b/src/widgets/contact-page/ui/contact-page.tsx
+@@ -253,7 +253,7 @@ export function ContactPage() {
+                   value={form.subject}
+                   onValueChange={(value) => handleChange("subject", value)}
+                 >
+-                  <SelectTrigger className="h-12 !rounded border-[#a8a29e] bg-[#f5f3ef] font-new-sans text-sm">
++                  <SelectTrigger className="!rounded h-12 border-[#a8a29e] bg-[#f5f3ef] font-new-sans text-sm">
+                     <SelectValue placeholder="Select an option" />
+                   </SelectTrigger>
+                   <SelectContent className="font-new-sans">
+diff --git a/src/widgets/header/ui/mobile-menu.tsx b/src/widgets/header/ui/mobile-menu.tsx
+index 6c85e2f..4b2cef8 100644
+--- a/src/widgets/header/ui/mobile-menu.tsx
++++ b/src/widgets/header/ui/mobile-menu.tsx
+@@ -246,7 +246,7 @@ export const MobileMenu: FC<MobileMenuProps> = ({ isAuthenticated, isTransparent
+                 href="https://wa.me/971542739213"
+                 target="_blank"
+                 rel="noopener noreferrer"
+-                className="flex w-fit items-center gap-2 font-light font-new-serif text-2xl text-[#1C1C1C] mt-4"
++                className="mt-4 flex w-fit items-center gap-2 font-light font-new-serif text-2xl text-[#1C1C1C]"
+               >
+                 Text Us{" "}
+                 <Image
+@@ -279,7 +279,7 @@ export const MobileMenu: FC<MobileMenuProps> = ({ isAuthenticated, isTransparent
+                   <div className="h-[1.5px] w-full bg-[#D6D3D1]" />
+                   <Button
+                     onClick={handleLogout}
+-                    className="flex items-center gap-2 px-4 pl-5 font-new-sans font-normal text-sm transition-opacity hover:opacity-70 justify-normal"
++                    className="flex items-center justify-normal gap-2 px-4 pl-5 font-new-sans font-normal text-sm transition-opacity hover:opacity-70"
+                     variant="simple"
+                   >
+                     <LogOutIcon size={20} />
+diff --git a/src/widgets/header/ui/notifications-dropdown.tsx b/src/widgets/header/ui/notifications-dropdown.tsx
+index f8954ce..a806c82 100644
+--- a/src/widgets/header/ui/notifications-dropdown.tsx
++++ b/src/widgets/header/ui/notifications-dropdown.tsx
+@@ -19,12 +19,11 @@ import {
+ } from "@/shared/ui/popover/popover";
+ import { NotificationBadge } from "@/shared/ui/shadcn/badge";
+ import {Button} from "@/shared/ui/shadcn/button";
+-import {router} from "next/client";
+ 
+ function StatusDot({ unread }: { unread: boolean }) {
+   return (
+     <span
+-      className="mt-[5px] shrink-0 size-[10px] rounded-full"
++      className="mt-[5px] size-[10px] shrink-0 rounded-full"
+       style={{ backgroundColor: unread ? "#047857" : "#A8A29E" }}
+     />
+   );
+@@ -61,24 +60,24 @@ function NotificationRow({ item, onClose }: NotificationRowProps) {
+ 
+   return (
+     <div className="flex w-full shrink-0 flex-col items-start rounded-xl border border-[#D6D3D1] bg-[#EDE9E3] p-4">
+-      <div className="flex w-full gap-4 items-start">
++      <div className="flex w-full items-start gap-4">
+         <div className="flex shrink-0 items-start py-1">
+           <StatusDot unread={unread} />
+         </div>
+         <div className="flex min-w-0 flex-1 flex-col gap-1">
+-          <div className="flex gap-1 items-baseline text-[14px] leading-[1.5] tracking-[-0.14px]">
++          <div className="flex items-baseline gap-1 text-[14px] leading-[1.5] tracking-[-0.14px]">
+             <span
+               className="shrink-0 font-bold font-new-sans"
+               style={{ color: contentColor }}
+             >
+               {item.title}
+             </span>
+-            <span className="shrink-0 font-normal font-new-sans text-[#A8A29E]">
++            <span className="shrink-0 font-new-sans font-normal text-[#A8A29E]">
+               {timeAgo(item.createdAt)}
+             </span>
+           </div>
+           <p
+-            className="font-normal font-new-sans text-[14px] leading-[1.5] tracking-[-0.14px]"
++            className="font-new-sans font-normal text-[14px] leading-[1.5] tracking-[-0.14px]"
+             style={{ color: contentColor }}
+           >
+             {item.body}
+@@ -86,7 +85,7 @@ function NotificationRow({ item, onClose }: NotificationRowProps) {
+           {viewUrl && (
+             <div className="mt-1 flex items-start">
+               <Button
+-                className="px-3 py-2 rounded-sm"
++                className="rounded-sm px-3 py-2"
+                 onClick={() => {
+                   if (unread) {
+                     markRead({ notificationIds: [item.id] });
+@@ -133,7 +132,7 @@ export function HeaderNotificationsDropdown({
+   return (
+     <Popover open={open} onOpenChange={setOpen}>
+       <PopoverTrigger asChild>
+-        <button aria-label="Notifications" className="cursor-pointer flex items-center" type="button">
++        <button aria-label="Notifications" className="flex cursor-pointer items-center" type="button">
+           <NotificationBadge show={unreadCount > 0}>
+             <BellIcon className={bellClassName} size={24} />
+           </NotificationBadge>
+@@ -148,7 +147,7 @@ export function HeaderNotificationsDropdown({
+         <div className="flex flex-col gap-5 rounded-xl border border-border bg-background pt-5 pb-3">
+           {/* Header */}
+           <div className="flex items-center justify-between px-6">
+-            <span className="font-semibold font-new-sans text-[20px] leading-[24px] tracking-[-0.2px] text-foreground">
++            <span className="font-new-sans font-semibold text-[20px] text-foreground leading-[24px] tracking-[-0.2px]">
+               Notifications
+             </span>
+             <Button
+@@ -176,15 +175,15 @@ export function HeaderNotificationsDropdown({
+               Failed to load notifications
+             </p>
+           )}
+-          {!isLoading && !isError && isEmpty && (
++          {!(isLoading || isError ) && isEmpty && (
+             <div className="flex flex-col items-center gap-1 px-3 py-4">
+               <InboxIcon className="text-muted-foreground" size={20} />
+-              <span className="font-medium font-new-sans text-[14px] leading-[1.5] tracking-[-0.14px] text-muted-foreground whitespace-nowrap">
++              <span className="whitespace-nowrap font-medium font-new-sans text-[14px] text-muted-foreground leading-[1.5] tracking-[-0.14px]">
+                 You are up to date!
+               </span>
+             </div>
+           )}
+-          {!isLoading && !isError && !isEmpty && (
++          {!((isLoading || isError ) || isEmpty ) && (
+             <div className="flex max-h-[560px] flex-col gap-2 overflow-y-auto px-3">
+               {items.map((item) => (
+                 <NotificationRow
+diff --git a/src/widgets/payment-history/ui/payment-history.tsx b/src/widgets/payment-history/ui/payment-history.tsx
+index e07d51e..d203998 100644
+--- a/src/widgets/payment-history/ui/payment-history.tsx
++++ b/src/widgets/payment-history/ui/payment-history.tsx
+@@ -326,7 +326,7 @@ export function PaymentHistory() {
+             <div className="overflow-hidden rounded-xl border border-[#D6D3D1]">
+               {/* Header */}
+               <div
+-                className="flex h-12 items-center border-b border-[#D6D3D1] px-2 py-2"
++                className="flex h-12 items-center border-[#D6D3D1] border-b px-2 py-2"
+                 style={{
+                   background:
+                     "linear-gradient(0deg, rgba(255,255,255,0.6), rgba(255,255,255,0.6)), #EDE9E3",
+@@ -372,7 +372,7 @@ export function PaymentHistory() {
+               </div>
+ 
+               {/* Footer */}
+-              <div className="border-t border-[#D6D3D1] bg-[#F5F3EF] p-4">
++              <div className="border-[#D6D3D1] border-t bg-[#F5F3EF] p-4">
+                 <PaginationFooter {...paginationProps} />
+               </div>
+             </div>
+diff --git a/src/widgets/request-forgot-password-form/ui/request-forgot-password-form.tsx b/src/widgets/request-forgot-password-form/ui/request-forgot-password-form.tsx
+index 322f868..66271af 100644
+--- a/src/widgets/request-forgot-password-form/ui/request-forgot-password-form.tsx
++++ b/src/widgets/request-forgot-password-form/ui/request-forgot-password-form.tsx
+@@ -182,7 +182,7 @@ export function RequestForgotPasswordForm() {
+               name="email"
+               render={({ field }) => (
+                 <FormItem className="w-full">
+-                  <FormLabel className="font-new-sans font-normal text-sm leading-[1.3] text-[#44403C]">Email</FormLabel>
++                  <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[1.3]">Email</FormLabel>
+                   <FormControl>
+                     <Input
+                       placeholder="Enter your email"
+@@ -199,7 +199,7 @@ export function RequestForgotPasswordForm() {
+             <Button
+               type="submit"
+               disabled={isLoading}
+-              className="h-12 w-full rounded-[4px] font-new-sans font-medium text-base"
++              className="h-12 w-full rounded-[4px] font-medium font-new-sans text-base"
+             >
+               {isLoading ? "Sending Code..." : "Send Recovery Code"}
+             </Button>
+@@ -226,7 +226,7 @@ export function RequestForgotPasswordForm() {
+               name="phone"
+               render={({ field }) => (
+                 <FormItem className="w-full">
+-                  <FormLabel className="font-new-sans font-normal text-sm leading-[1.3] text-[#44403C]">Phone Number</FormLabel>
++                  <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[1.3]">Phone Number</FormLabel>
+                   <FormControl>
+                     <PhoneInput
+                       defaultCountryAlpha2="AE"
+@@ -242,7 +242,7 @@ export function RequestForgotPasswordForm() {
+             <Button
+               type="submit"
+               disabled={isLoading}
+-              className="h-12 w-full rounded-[4px] font-new-sans font-medium text-base"
++              className="h-12 w-full rounded-[4px] font-medium font-new-sans text-base"
+             >
+               {isLoading ? "Sending Code..." : "Send Recovery Code"}
+             </Button>
+diff --git a/src/widgets/services/permanent-sale-page/ui/permanent-sale-page.tsx b/src/widgets/services/permanent-sale-page/ui/permanent-sale-page.tsx
+index c904dd2..eb26cc7 100644
+--- a/src/widgets/services/permanent-sale-page/ui/permanent-sale-page.tsx
++++ b/src/widgets/services/permanent-sale-page/ui/permanent-sale-page.tsx
+@@ -129,7 +129,7 @@ export function PermanentSalePage() {
+ 
+       <section className="w-full border-border border-y">
+         <div className="grid grid-cols-1 font-new-sans md:grid-cols-3">
+-          <div className="flex flex-col gap-2 border-border border-b p-8 md:border-b-0 md:border-r">
++          <div className="flex flex-col gap-2 border-border border-b p-8 md:border-r md:border-b-0">
+             <CircleCheckIcon
+               className="mb-2 h-6 w-6 text-primary"
+               strokeWidth={1.5}
+@@ -143,7 +143,7 @@ export function PermanentSalePage() {
+             </p>
+           </div>
+ 
+-          <div className="flex flex-col gap-2 border-border border-b p-8 md:border-b-0 md:border-r">
++          <div className="flex flex-col gap-2 border-border border-b p-8 md:border-r md:border-b-0">
+             <CircleCheckIcon
+               className="mb-2 h-6 w-6 text-primary"
+               strokeWidth={1.5}
+diff --git a/src/widgets/signup-form/ui/signup-form.tsx b/src/widgets/signup-form/ui/signup-form.tsx
+index b63c55f..135518c 100644
+--- a/src/widgets/signup-form/ui/signup-form.tsx
++++ b/src/widgets/signup-form/ui/signup-form.tsx
+@@ -1,8 +1,11 @@
+ "use client";
+ 
+ import { zodResolver } from "@hookform/resolvers/zod";
++import { signIn } from "next-auth/react";
+ import Link from "next/link";
++import Script from "next/script";
+ import { useRouter } from "next/navigation";
++import { useRef, useState } from "react";
+ import { useForm } from "react-hook-form";
+ import { z } from "zod";
+ 
+@@ -93,18 +96,55 @@ function UaePassIcon() {
+   );
+ }
+ 
+-const SOCIAL_BUTTONS = [
+-  { key: "google", Icon: GoogleIcon, label: "Google" },
+-  { key: "apple", Icon: AppleIcon, label: "Apple" },
+-  { key: "uaepass", Icon: UaePassIcon, label: "UAE Pass" },
+-];
+ 
+ export function SignupForm() {
+   const router = useRouter();
++  const [googleLoading, setGoogleLoading] = useState(false);
++  const googleBtnRef = useRef<HTMLDivElement>(null);
++  const googleInitialized = useRef(false);
+ 
+   const checkEmailExists = useCheckEmailExists();
+   const checkPhoneExists = useCheckPhoneExists();
+ 
++  const handleGoogleCredential = async (response: { credential: string }) => {
++    setGoogleLoading(true);
++    try {
++      const result = await signIn("google-oauth", {
++        idToken: response.credential,
++        redirect: false,
++      });
++
++      if (result?.ok) {
++        router.push(APP_ROUTES.APP.MY_DEALS);
++      } else {
++        toast.error("Google Sign In Failed", { description: "Please try again" });
++        setGoogleLoading(false);
++      }
++    } catch {
++      toast.error("Google Sign In Failed", { description: "An unexpected error occurred" });
++      setGoogleLoading(false);
++    }
++  };
++
++  const initGoogleButton = () => {
++    const google = window.google;
++    if (!google?.accounts?.id || !googleBtnRef.current || googleInitialized.current) return;
++
++    googleInitialized.current = true;
++
++    google.accounts.id.initialize({
++      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
++      callback: handleGoogleCredential,
++    });
++
++    google.accounts.id.renderButton(googleBtnRef.current, {
++      type: "standard",
++      theme: "outline",
++      size: "large",
++      width: googleBtnRef.current.offsetWidth || 200,
++    });
++  };
++
+   const form = useForm<SignupFormData>({
+     resolver: zodResolver(signupSchema),
+     defaultValues: {
+@@ -185,6 +225,12 @@ export function SignupForm() {
+   };
+ 
+   return (
++    <>
++      <Script
++        src="https://accounts.google.com/gsi/client"
++        strategy="afterInteractive"
++        onLoad={initGoogleButton}
++      />
+     <div className="new-design flex w-full flex-col gap-8">
+       {/* Header */}
+       <div className="flex flex-col gap-2">
+@@ -199,17 +245,39 @@ export function SignupForm() {
+ 
+       {/* Social Buttons */}
+       <div className="flex flex-col gap-2 sm:flex-row">
+-        {SOCIAL_BUTTONS.map(({ key, Icon, label }) => (
+-          <button
+-            key={key}
+-            type="button"
+-            disabled
+-            className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em] opacity-70 sm:flex-1"
+-          >
+-            <Icon />
+-            <span className="whitespace-nowrap">{label}</span>
+-          </button>
+-        ))}
++        {/* Google — overlay approach */}
++        <div className="relative h-12 w-full sm:flex-1">
++          <div className="pointer-events-none flex h-12 w-full items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em]">
++            <GoogleIcon />
++            <span className="whitespace-nowrap">
++              {googleLoading ? "..." : "Google"}
++            </span>
++          </div>
++          <div
++            ref={googleBtnRef}
++            className="absolute inset-0 overflow-hidden opacity-0"
++          />
++        </div>
++
++        {/* Apple — disabled */}
++        <button
++          type="button"
++          disabled
++          className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em] opacity-70 sm:flex-1"
++        >
++          <AppleIcon />
++          <span className="whitespace-nowrap">Apple</span>
++        </button>
++
++        {/* UAE Pass — disabled */}
++        <button
++          type="button"
++          disabled
++          className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em] opacity-70 sm:flex-1"
++        >
++          <UaePassIcon />
++          <span className="whitespace-nowrap">UAE Pass</span>
++        </button>
+       </div>
+ 
+       {/* Form Section */}
+@@ -370,5 +438,6 @@ export function SignupForm() {
+         </Form>
+       </div>
+     </div>
++    </>
+   );
+ }
+diff --git a/src/widgets/terms-page/model/constants.ts b/src/widgets/terms-page/model/constants.ts
+index d7aca30..1e14b40 100644
+--- a/src/widgets/terms-page/model/constants.ts
++++ b/src/widgets/terms-page/model/constants.ts
+@@ -95,8 +95,8 @@ export const TERMS_SECTIONS: TermsSection[] = [
+         type: "unorderedList",
+         items: [
+           `Transactional Communications (Required): Communications necessary for the operation of the User's account and Transactions, including Quote Request confirmations, Indicative Offer Amounts, Confirmed Offer Amounts, Physical Inspection updates, Transaction confirmations, payment notifications, Buyback Period reminders, account alerts, and security notifications. The User cannot opt out of transactional communications while maintaining an active account.`,
+-          `Service Communications: Updates about the Platform, changes to Terms or policies, new features, and service announcements.`,
+-          `Marketing Communications (Optional): Promotional offers, newsletters, and marketing messages. The User may opt out of marketing communications at any time without affecting account status.`,
++          "Service Communications: Updates about the Platform, changes to Terms or policies, new features, and service announcements.",
++          "Marketing Communications (Optional): Promotional offers, newsletters, and marketing messages. The User may opt out of marketing communications at any time without affecting account status.",
+         ],
+       },
+       { type: "boldParagraph", text: "2.3 SMS/Text Message Consent" },
+diff --git a/src/widgets/verify-otp-form/ui/verify-otp-form.tsx b/src/widgets/verify-otp-form/ui/verify-otp-form.tsx
+index be399db..9f7b834 100644
+--- a/src/widgets/verify-otp-form/ui/verify-otp-form.tsx
++++ b/src/widgets/verify-otp-form/ui/verify-otp-form.tsx
+@@ -118,7 +118,7 @@ export function VerifyOtpForm() {
+           }
+         }
+ 
+-        if (!emailOtpId || !phoneOtpId) {
++        if (!(emailOtpId && phoneOtpId)) {
+           toast.error("Invalid Code", {
+             description: "Please check your code and try again",
+           });

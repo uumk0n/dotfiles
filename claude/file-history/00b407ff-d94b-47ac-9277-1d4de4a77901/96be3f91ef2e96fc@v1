@@ -1,0 +1,5 @@
+import { BuybackServicePage } from "@/pages-layer/services/buyback/ui/buyback";
+
+export default function Page() {
+  return <BuybackServicePage />;
+}

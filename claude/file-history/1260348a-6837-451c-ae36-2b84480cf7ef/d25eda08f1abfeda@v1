@@ -1,0 +1,474 @@
+"use client";
+
+import { useBuybackRequest } from "@/shared/api/query-hooks/use-buyback-requests";
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { useCurrencyFormatter } from "@/shared/lib/hooks/use-currency-formatter";
+import { getCdnUrl } from "@/shared/lib/utils/get-cdn-url";
+import { BuybackRequestStatus } from "@/shared/types/buyback-request.types";
+import { BuybackType } from "@/shared/types/buyback.types";
+import { BackButton } from "@/shared/ui/back-button-new/back-button";
+import { UploadProgressScreen } from "@/shared/ui/upload-progress-screen";
+import { Separator } from "@/shared/ui/shadcn/separator";
+import { AcceptOfferModal } from "@/widgets/accept-offer-modal";
+import { DeliveryInfoBreakdown } from "@/widgets/buyback-delivery-info-breakdown";
+import { BuybackDetailsStepper } from "@/widgets/buyback-details-stepper-new";
+import { IndicativeOfferBreakdown } from "@/widgets/buyback-indicative-offer-breakdown";
+import { OfferDecisionBlock } from "@/widgets/buyback-offer-decision-block";
+import { OfferDeclinedBlock } from "@/widgets/buyback-offer-declined-block";
+import { OfferFinalOfferBlock } from "@/widgets/buyback-offer-final-offer-block";
+import { OfferPostAuthFailedBlock } from "@/widgets/buyback-offer-post-auth-failed";
+import { OfferPreSuccessBlock } from "@/widgets/buyback-offer-pre-success-block";
+import { OfferReceivedBlock } from "@/widgets/buyback-offer-received-block";
+import { OfferTransactionPendingBlock } from "@/widgets/buyback-offer-transaction-pending-block";
+import { useBuybackOffers } from "@/widgets/buyback-request-details/hooks/use-buyback-offers";
+import { useBuybackRequestModals } from "@/widgets/buyback-request-details/hooks/use-buyback-request-modals";
+import { Clock4Icon, InfoIcon } from "lucide-react";
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+
+const AssetHandoverModal = dynamic(
+  () =>
+    import("@/widgets/asset-handover-modal").then((mod) => ({
+      default: mod.AssetHandoverModal,
+    })),
+  { ssr: false }
+);
+
+const RejectOfferModal = dynamic(
+  () =>
+    import("@/widgets/reject-offer-modal-new").then((mod) => ({
+      default: mod.RejectOfferModal,
+    })),
+  { ssr: false }
+);
+
+const TrackRequestModal = dynamic(
+  () =>
+    import("@/widgets/track-request-modal").then((mod) => ({
+      default: mod.TrackRequestModal,
+    })),
+  { ssr: false }
+);
+
+const KycVerificationRequiredModal = dynamic(
+  () =>
+    import("@/widgets/kyc-verification-required-modal").then((mod) => ({
+      default: mod.KycVerificationRequiredModal,
+    })),
+  { ssr: false }
+);
+
+const _FINAL_OFFER_STATUSES = new Set([
+  BuybackRequestStatus.FinalOfferSent,
+  BuybackRequestStatus.KycPending,
+  BuybackRequestStatus.KycApproved,
+]);
+
+interface BuybackRequestDetailsProps {
+  requestId: string;
+}
+
+export function BuybackRequestDetails(props: BuybackRequestDetailsProps) {
+  const [isPostOfferModified, setIsPostOfferModified] = useState(false);
+  const { formatAmount } = useCurrencyFormatter();
+
+  const { requestId } = props;
+  const router = useRouter();
+  const { modals, actions } = useBuybackRequestModals();
+  const { data: request, isLoading } = useBuybackRequest(requestId, true);
+  const [isDeliveryInfoBreakdownOpen, setIsDeliveryInfoBreakdownOpen] =
+    useState(false);
+  const buybackId = request?.buyback.id || "";
+
+  const { isSubmittingPreAuth } = useBuybackOffers(
+    requestId,
+    actions.openKycModal,
+    actions.openAcceptOfferModal
+  );
+
+  const redirectToBuybackDetailPage = useCallback(
+    (id: string) => {
+      router.push(APP_ROUTES.BUYBACKS.DETAIL(id));
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    // Check if Post Offer is Modified
+    if (
+      request?.status === BuybackRequestStatus.FinalOfferSent &&
+      request.preAuthOffer?.data.amountCents !==
+        request.postAuthOffer?.data.amountCents
+    ) {
+      setIsPostOfferModified(true);
+    }
+
+    if (
+      request?.status === BuybackRequestStatus.FinalOfferAccepted &&
+      buybackId
+    ) {
+      redirectToBuybackDetailPage(buybackId);
+    }
+  }, [request, buybackId, redirectToBuybackDetailPage]);
+
+  if (isLoading)
+    return (
+      <UploadProgressScreen className="min-h-screen" />
+    );
+
+  if (!request)
+    return (
+      <div className="w-full px-3 py-4 sm:px-4 sm:py-5">
+        <div className="mx-auto w-full py-8 text-center sm:py-10">
+          <p className="font-serif text-base sm:text-lg">Request not found</p>
+        </div>
+      </div>
+    );
+
+  const asset = request.buyback.asset;
+
+  const buybackTypeLabel =
+    request.buyback.type === BuybackType.Buyback
+      ? "Sale with Buyback"
+      : "Permanent Sale";
+
+  // ---------------------  STATE FOR BUYBACK REQUEST STATUS  ---------------------
+  // STEP: 2. If Indicative Offer Approval
+  const showPreAuthOfferSentDecisionBlock =
+    request.status === BuybackRequestStatus.PreAuthOfferSent;
+  const showPreAuthOfferDeclinedBlock =
+    request.status === BuybackRequestStatus.RejectedPreAuthOffer;
+
+  // STEP: 3. If Indicative Offer Accepted
+  const showOfferPreSuccessBlock =
+    request.status === BuybackRequestStatus.PreAuthOfferAccepted;
+
+  // STEP 4. Final Offer Approval
+  const showOfferItemReceivedBlock =
+    request.status === BuybackRequestStatus.AssetReceived;
+  const showOfferPendingPostAuthBlock =
+    request.status === BuybackRequestStatus.PendingAuth;
+  const showOfferPostAuthSuccessBlock =
+    request.status === BuybackRequestStatus.AuthCompleted;
+  const showOfferFinalOfferSentBlock =
+    request.status === BuybackRequestStatus.FinalOfferSent;
+
+  const showOfferFinalOfferDeclinedBlock =
+    request.status === BuybackRequestStatus.RejectedPostAuthOffer;
+  const showOfferPostAuthVerificationFailed =
+    request.status === BuybackRequestStatus.PostAuthVerificationFailed;
+
+  // STEP 5. Buyback Activation
+  const showOfferTransactionPendingBlock =
+    request.status === BuybackRequestStatus.TransactionPending;
+
+  return (
+    <div className="new-design w-full">
+      <BuybackDetailsStepper
+        currentStatus={request.status}
+        eventsLog={request.eventsLog}
+      />
+      <Separator className="max-lg:hidden" />
+      <div className="mx-auto flex w-full flex-col-reverse pb-10 lg:grid lg:grid-cols-10 lg:items-start lg:gap-12">
+        {/* LEFT SECTION */}
+        <div className="mt-8 flex w-full flex-col gap-4 lg:col-span-4 lg:px-0">
+          <div className="hidden lg:flex">
+            <BackButton href={APP_ROUTES.APP.MY_DEALS} label="Back" />
+          </div>
+
+          <div className="mt-4 flex flex-col gap-1">
+            {/* ---------------------- MODEL INFO BLOCK --------------------- */}
+            <div className="flex flex-col gap-1">
+              <span className="w-fit rounded-[8px] bg-[#E2E8F0] px-2 py-1 font-new-sans text-primary text-xs">
+                {`${buybackTypeLabel} — ${request.buyback.id.slice(-6).toLocaleUpperCase()}`}
+              </span>
+              <div className="flex gap-2 font-extralight font-new-serif text-3xl max-md:flex-col">
+                <h2 className="text-3xl">{request.buyback.asset.brand.name}</h2>
+                <span className="text-3xl">
+                  {request.buyback.asset.model.name}
+                </span>
+              </div>
+              {request.buyback.asset.modelNumber !== "N/A" && (
+                <p className="font-new-sans text-muted-foreground text-xs sm:text-sm">
+                  Model Number: {request.buyback.asset.modelNumber}
+                </p>
+              )}
+            </div>
+            {/* ============================================================= */}
+
+            {/* ------------------------ PRICE BLOCK ------------------------ */}
+            <div className="flex flex-col gap-2">
+              <h3 className="mt-9 flex flex-col font-[400] font-new-sans text-sm">
+                Indicative Offer Amount
+              </h3>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex items-center gap-2 font-extralight">
+                  {request.preAuthOffer?.data.amountCents ? (
+                    <span className="flex font-extralight font-new-serif text-4xl lg:text-5xl">
+                      {formatAmount(
+                        request.postAuthOffer?.data.amountCents ??
+                          request.preAuthOffer.data.amountCents,
+                        { noDecimals: true },
+                      )}
+                    </span>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Clock4Icon size={32} />
+                      <span className="font-extralight font-new-serif text-4xl lg:text-5xl">
+                        Processing
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {(request.status === BuybackRequestStatus.PreAuthOfferSent ||
+                  request.status === BuybackRequestStatus.FinalOfferSent) &&
+                  (() => {
+                    const offer = request.postAuthOffer ?? request.preAuthOffer;
+                    const expiresAt = offer?.expiresAt ?? null;
+                    if (!expiresAt) return null;
+                    const ms = new Date(expiresAt).getTime() - Date.now();
+                    if (ms <= 0) return null;
+                    const hours = Math.floor(ms / 3_600_000);
+                    const minutes = Math.floor((ms % 3_600_000) / 60_000);
+                    const remaining =
+                      hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                    return (
+                      <div className="flex gap-1 font-new-sans text-sm">
+                        <span>Offer expires in:</span>
+                        <span className="font-semibold">{remaining}</span>
+                      </div>
+                    );
+                  })()}
+              </div>
+            </div>
+            {/* ============================================================= */}
+
+            {/* ------------------- INFO BLOCK (request) -------------------- */}
+            <div className="flex flex-col">
+              {/* STEP: 2. If Indicative Offer Approval */}
+              {showPreAuthOfferSentDecisionBlock && (
+                <div className="mt-2 mb-8 flex flex-col">
+                  <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[#E5E8F3] p-4 text-primary">
+                    <InfoIcon className="mt-0.5 shrink-0" size={20} />
+                    <div className="flex flex-col gap-1">
+                      <span className="font-bold text-sm">What is next?</span>
+                      <p className="text-sm">
+                        Accept the offer to continue your preferred handoff
+                        method (collection or drop-off).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showPreAuthOfferSentDecisionBlock &&
+                !isDeliveryInfoBreakdownOpen && (
+                  <>
+                    <OfferDecisionBlock
+                      isLoading={isSubmittingPreAuth}
+                      onAccept={() => {
+                        // actions.openAcceptModal();
+                        setIsDeliveryInfoBreakdownOpen(true);
+                      }}
+                      onDecline={() => actions.openRejectModal("pre-auth")}
+                    />
+                    {request.preAuthOffer?.data && (
+                      <IndicativeOfferBreakdown
+                        offerData={request.preAuthOffer?.data}
+                      />
+                    )}
+                  </>
+                )}
+
+              {showPreAuthOfferSentDecisionBlock &&
+                isDeliveryInfoBreakdownOpen && (
+                  <DeliveryInfoBreakdown
+                    onDecline={() => actions.openRejectModal("pre-auth")}
+                  />
+                )}
+
+              {showPreAuthOfferDeclinedBlock && <OfferDeclinedBlock />}
+
+              {/* STEP: 3. If Indicative Offer Accepted */}
+              {showOfferPreSuccessBlock && (
+                <div className="mt-10">
+                  <OfferPreSuccessBlock />
+                </div>
+              )}
+
+              {/* STEP 4. Final Offer Approval */}
+              {(showOfferItemReceivedBlock ||
+                showOfferPendingPostAuthBlock ||
+                showOfferPostAuthSuccessBlock) && (
+                <div className="mt-10 flex flex-col gap-4">
+                  <OfferReceivedBlock />
+                  <div>
+                    {request.preAuthOffer?.data && (
+                      <IndicativeOfferBreakdown
+                        offerData={request.preAuthOffer?.data}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {showOfferFinalOfferSentBlock && (
+                <div className="mt-6 flex flex-col gap-4">
+                  {isPostOfferModified ? (
+                    <OfferFinalOfferBlock
+                      isModified
+                      onAcceptOffer={actions.openAcceptOfferModal}
+                      request={request}
+                    />
+                  ) : (
+                    <OfferFinalOfferBlock
+                      onAcceptOffer={actions.openAcceptOfferModal}
+                      request={request}
+                    />
+                  )}
+                  <div>
+                    {request.postAuthOffer?.data && (
+                      <IndicativeOfferBreakdown
+                        offerData={request.postAuthOffer?.data}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {showOfferFinalOfferDeclinedBlock && <OfferDeclinedBlock />}
+
+              {showOfferPostAuthVerificationFailed && (
+                <OfferPostAuthFailedBlock />
+              )}
+
+              {/* STEP 5. Buyback Activation */}
+              {showOfferTransactionPendingBlock && (
+                <div className="flex flex-col gap-4">
+                  <OfferTransactionPendingBlock />
+                  <div>
+                    {request.postAuthOffer?.data && (
+                      <IndicativeOfferBreakdown
+                        offerData={request.postAuthOffer?.data}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* ============================================================= */}
+
+            <Separator className="my-10" />
+
+            {/* ------------------ DETAILS CARD INFO BLOCK ------------------ */}
+            <div className="space-y-4 rounded-2xl bg-[#EEE9E3] p-6 font-new-sans">
+              <h3 className="py-4 font-bold text-base text-gray-800">
+                Item Details
+              </h3>
+              <div className="space-y-3 text-sm">
+                {[
+                  {
+                    label: "Offer type and ID",
+                    value: `${buybackTypeLabel} — ${request.buyback.id.slice(-6).toLocaleUpperCase()}`,
+                  },
+                  { label: "Category", value: asset.category.name },
+                  { label: "Brand", value: asset.brand.name },
+                  { label: "Model", value: asset.model.name },
+                  { label: "Reference", value: "321 311.30.40.30.01.001" },
+                  { label: "Condition", value: asset.condition },
+                  {
+                    label: "Additional details",
+                    value:
+                      "Original box, Ownership Certificate, Other Documents",
+                  },
+                ].map((item, i) => (
+                  <div
+                    className="flex items-start justify-between gap-4 border-gray-300/50 border-b pb-2 last:border-0"
+                    key={i}
+                  >
+                    <span className="shrink-0 text-gray-500">{item.label}</span>
+                    <span className="text-right font-semibold">
+                      {item.value as string}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* ============================================================= */}
+          </div>
+        </div>
+
+        {/* RIGHT SECTION */}
+        <div className="col-span-6 grid w-full gap-[2px]">
+          <Separator className="mt-4 lg:hidden" />
+          <div className="py-8 lg:hidden">
+            <BackButton href={APP_ROUTES.APP.MY_DEALS} label="Back" />
+          </div>
+          <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto lg:grid lg:grid-cols-2 lg:gap-[2px] lg:overflow-visible">
+            {[...asset.photos].reverse().map((photo, index, array) => (
+              <div
+                className="lg:!mr-0 relative aspect-square w-[90%] flex-shrink-0 snap-center overflow-hidden lg:w-auto"
+                key={index + photo}
+                style={{
+                  marginRight: index !== array.length - 1 ? "8px" : "0px",
+                }}
+              >
+                <Image
+                  alt={`Asset photo ${index + 1}`}
+                  className="object-cover object-center"
+                  fill
+                  src={getCdnUrl(photo)}
+                  unoptimized
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* MODALS */}
+      <AssetHandoverModal
+        isOpen={modals.isAcceptModalOpen}
+        onClose={actions.closeAcceptModal}
+        request={request}
+      />
+
+      <AcceptOfferModal
+        isOpen={modals.isAcceptOfferModalOpen}
+        onClose={actions.closeAcceptOfferModal}
+        request={request}
+      />
+
+      <RejectOfferModal
+        isOpen={modals.isRejectModalOpen}
+        offerType={modals.rejectOfferType}
+        onClose={actions.closeRejectModal}
+        request={request}
+      />
+
+      <TrackRequestModal
+        isOpen={modals.isTrackModalOpen}
+        onClose={actions.closeTrackModal}
+        request={request}
+      />
+
+      <KycVerificationRequiredModal
+        buybackRequestId={requestId}
+        isOpen={modals.isKycModalOpen}
+        onClose={actions.closeKycModal}
+      />
+
+      <style global jsx>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
+    </div>
+  );
+}

@@ -1,0 +1,24 @@
+export const SUPPORTED_CURRENCIES = ['USD', 'AED'] as const;
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
+export const DEFAULT_CURRENCY: SupportedCurrency = 'AED';
+
+// Fixed peg, no live rates needed
+export const CURRENCY_EXCHANGE_RATES: Record<SupportedCurrency, number> = {
+  USD: 1,
+  AED: 3.6725,
+};
+
+/**
+ * Converts an amount in minor units from one currency to another.
+ * Uses Math.round — always produces an integer.
+ */
+export function convertMinorUnits(
+  amount: number,
+  from: SupportedCurrency,
+  to: SupportedCurrency,
+): number {
+  if (from === to) return amount;
+  const rate = CURRENCY_EXCHANGE_RATES[to] / CURRENCY_EXCHANGE_RATES[from];
+  return Math.round(amount * rate);
+}

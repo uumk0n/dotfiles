@@ -1,0 +1,14 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class EnableUaeOnly1775748605144 implements MigrationInterface {
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`UPDATE "country" SET "enabled" = false`);
+    await queryRunner.query(
+      `UPDATE "country" SET "enabled" = true WHERE "alpha_2" = 'AE'`,
+    );
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`UPDATE "country" SET "enabled" = true`);
+  }
+}

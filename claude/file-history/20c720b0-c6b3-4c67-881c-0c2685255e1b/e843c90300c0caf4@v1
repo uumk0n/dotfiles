@@ -1,0 +1,88 @@
+import { NotificationMedia } from './notification-media.const';
+import { NotificationType } from './notification-type.const';
+
+/**
+ * Defines which notification media should be used for each notification type.
+ */
+export const NOTIFICATION_MEDIA_BY_TYPE: Record<
+  NotificationType,
+  NotificationMedia[]
+> = {
+  // Buyback requests (seller)
+  [NotificationType.BuybackRequestMajorEvent]: [
+    NotificationMedia.Email,
+    NotificationMedia.InApp,
+  ],
+  [NotificationType.BuybackRequestMinorEvent]: [NotificationMedia.InApp],
+
+  // Buybacks (seller)
+  [NotificationType.BuybackExtendReminder]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackDeadlineComingUp]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackUnsettled]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackExtendedByAdmin]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackOfferExpired]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackFinalExtensionApproved]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackFinalExtensionRejected]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+
+  // KYC
+  [NotificationType.KycReminder]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.KycApproved]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.KycRejected]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+
+  // Authenticators
+  [NotificationType.AuthenticationRequest]: [
+    NotificationMedia.Email,
+    NotificationMedia.InApp,
+    NotificationMedia.Phone,
+  ],
+
+  // Admin
+  [NotificationType.BuybackRequestAdminMinorEvent]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackRequestAdminMajorEvent]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackAdminMinorEvent]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  [NotificationType.BuybackAdminMajorEvent]: [
+    NotificationMedia.InApp,
+    NotificationMedia.Email,
+  ],
+  // Ticket
+  [NotificationType.TicketClosed]: [NotificationMedia.InApp],
+};

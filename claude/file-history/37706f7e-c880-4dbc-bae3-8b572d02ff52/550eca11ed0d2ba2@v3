@@ -1,0 +1,256 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { signIn } from "next-auth/react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+
+import Image from "next/image";
+
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { hardPush } from "@/shared/lib/routing/hard-push";
+import { getIsClient } from "@/shared/lib/utils/get-is-client";
+import { Form } from "@/shared/ui/form/form";
+import { FormControl } from "@/shared/ui/form/form-control";
+import { FormField } from "@/shared/ui/form/form-field";
+import { FormItem } from "@/shared/ui/form/form-item";
+import { FormLabel } from "@/shared/ui/form/form-label";
+import { FormMessage } from "@/shared/ui/form/form-message";
+import { Input } from "@/shared/ui/input";
+import { toast } from "@/shared/ui/notification";
+import { PasswordInput } from "@/shared/ui/password-input";
+
+const loginSchema = z.object({
+  email: z.string().email("Please enter a valid email"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
+
+function GoogleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M19.6 10.23c0-.68-.06-1.36-.18-2H10v3.79h5.37a4.61 4.61 0 0 1-1.99 3.01v2.5h3.22c1.88-1.73 2.96-4.28 2.96-7.3z"
+        fill="#4285F4"
+      />
+      <path
+        d="M10 20c2.7 0 4.96-.9 6.61-2.43l-3.22-2.5c-.9.6-2.04.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H1.06v2.57A9.99 9.99 0 0 0 10 20z"
+        fill="#34A853"
+      />
+      <path
+        d="M4.39 11.9A5.9 5.9 0 0 1 4.08 10c0-.66.12-1.3.31-1.9V5.53H1.06A9.99 9.99 0 0 0 0 10c0 1.61.38 3.13 1.06 4.47l3.33-2.57z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M10 3.97c1.47 0 2.8.51 3.84 1.5l2.87-2.87C15 .9 12.71 0 10 0A9.99 9.99 0 0 0 1.06 5.53L4.39 8.1C5.18 5.73 7.39 3.97 10 3.97z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <Image
+      src="/new-design-images/auth/apple-logo.svg"
+      alt=""
+      width={17}
+      height={20}
+      className="shrink-0"
+    />
+  );
+}
+
+function UaePassIcon() {
+  return (
+    <Image
+      src="/new-design-images/auth/uae-pass-logo.svg"
+      alt=""
+      width={21}
+      height={20}
+      className="shrink-0"
+    />
+  );
+}
+
+const SOCIAL_BUTTONS = [
+  { key: "google", Icon: GoogleIcon, label: "Google" },
+  { key: "apple", Icon: AppleIcon, label: "Apple" },
+  { key: "uaepass", Icon: UaePassIcon, label: "UAE Pass" },
+];
+
+export default function SignInPage() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!getIsClient()) return;
+    const params = new URLSearchParams(window.location.search);
+    setCallbackUrl(params.get("callbackUrl"));
+  }, []);
+
+  const form = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const onSubmit = async (data: LoginFormData) => {
+    setIsLoading(true);
+    try {
+      const result = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        toast.error("Sign In Failed", {
+          description: "Invalid email or password",
+        });
+        return;
+      }
+
+      if (result?.ok) {
+        hardPush(callbackUrl || APP_ROUTES.PROFILE);
+      }
+    } catch {
+      toast.error("Sign In Failed", {
+        description: "An unexpected error occurred",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex w-full flex-col gap-8">
+      {/* Header */}
+      <div className="flex flex-col">
+        <h1 className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+          Welcome Back
+        </h1>
+        <p className="font-new-sans text-[#44403C] text-base leading-[150%] tracking-[-0.01em]">
+          Login to your account to access LuxFlow
+        </p>
+      </div>
+
+      {/* Social Buttons */}
+      <div className="flex gap-2">
+        {SOCIAL_BUTTONS.map(({ key, Icon, label }) => (
+          <button
+            key={key}
+            type="button"
+            disabled
+            className="flex flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 py-3 font-medium font-new-sans text-[#44403C] text-sm tracking-[-0.01em] opacity-70"
+          >
+            <Icon />
+            <span className="whitespace-nowrap">{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Form Section */}
+      <div className="flex flex-col gap-5">
+        {/* OR Divider */}
+        <div className="flex items-center gap-4">
+          <div className="flex-1 border-[#D6D3D1] border-t" />
+          <span className="font-bold font-new-sans text-[#A8A29E] text-sm tracking-[-0.01em]">
+            OR
+          </span>
+          <div className="flex-1 border-[#D6D3D1] border-t" />
+        </div>
+
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex flex-col gap-5"
+          >
+            <div className="flex flex-col gap-2">
+              {/* Email */}
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+                      Email
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter your email"
+                        type="email"
+                        className="h-12 rounded-[4px] border-[#A8A29E] bg-[#F5F3EF] px-3 font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Password */}
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+                      Password
+                    </FormLabel>
+                    <FormControl>
+                      <PasswordInput
+                        placeholder="Placeholder"
+                        containerClassName="h-12 rounded-[4px] border-[#A8A29E] bg-[#F5F3EF] px-3"
+                        className="font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
+                        {...field}
+                      />
+                    </FormControl>
+                    <div className="flex justify-end">
+                      <Link
+                        href={APP_ROUTES.AUTH.REQUEST_FORGOT_PASSWORD}
+                        className="font-new-sans text-[#000944] text-xs leading-[130%] transition-opacity hover:opacity-70"
+                      >
+                        Forgot Password
+                      </Link>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Login Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex h-12 w-full items-center justify-center rounded-[4px] bg-[#021171] font-medium font-new-sans text-[#F5F3EF] text-base transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isLoading ? "Signing In..." : "Login"}
+            </button>
+
+            {/* Sign up link */}
+            <p className="text-center font-new-sans text-[#44403C] text-sm leading-[150%] tracking-[-0.01em]">
+              New to LuxFlow.{" "}
+              <Link
+                href={APP_ROUTES.AUTH.REGISTER}
+                className="font-semibold text-[#44403C] hover:opacity-70"
+              >
+                Create an Account
+              </Link>
+            </p>
+          </form>
+        </Form>
+      </div>
+    </div>
+  );
+}

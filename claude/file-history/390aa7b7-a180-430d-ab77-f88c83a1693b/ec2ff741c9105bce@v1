@@ -1,0 +1,145 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+
+import { ApiExtraModels, ApiTags } from '@nestjs/swagger';
+
+import { OptionalAuthGuard, Protected, UnProtect } from '@/modules/auth';
+
+import { UserRole } from '@/db';
+
+import { GuestTicketService, TicketService } from '@/modules/ticket';
+
+import { ListQuery } from '@/utils';
+
+import {
+  RaiseTicketDto,
+  TicketFiltersUserDto,
+  TicketListItemDto,
+  TicketResponseDto,
+} from './dtos';
+import {
+  CancelTicketOpenApi,
+  DeleteTicketOpenApi,
+  GetTicketOpenApi,
+  GetTicketsOpenApi,
+  RaiseTicketOpenApi,
+} from './tickets.openapi';
+import { ContextService } from '@/modules/global';
+import { GuestTicketResponseDto } from '@/api/public/tickets/dtos';
+
+@ApiTags('App / Tickets')
+@ApiExtraModels(TicketListItemDto, TicketResponseDto)
+@Controller()
+@Protected([UserRole.Bidder, UserRole.Seller, UserRole.Retailer])
+export class TicketsController {
+  constructor(
+    private readonly ticketService: TicketService,
+    private readonly guestTicketService: GuestTicketService,
+    private readonly contextService: ContextService,
+  ) {}
+
+  @Get('/')
+  @GetTicketsOpenApi()
+  async getMany(
+    @Query() listQuery: ListQuery,
+    @Query() filters: TicketFiltersUserDto,
+  ) {
+    const userId = this.contextService.context.user.id;
+
+    const { data, total, skip, take } = await this.ticketService.getMany(
+      userId,
+      listQuery,
+      filters,
+    );
+
+    return {
+      data: data.map(TicketListItemDto.mapFromEntity),
+      total,
+      skip,
+      take,
+    };
+  }
+
+  @Get(':id')
+  @GetTicketOpenApi()
+  async getOne(@Param('id') id: string): Promise<TicketResponseDto> {
+    const userId = this.contextService.context.user.id;
+
+    const ticket = await this.ticketService.getOne(id, userId);
+
+    return TicketResponseDto.mapFromEntity(ticket);
+  }
+
+  @Post('/')
+  @UnProtect()
+  @UseGuards(OptionalAuthGuard)
+  @RaiseTicketOpenApi()
+  async raise(
+    @Body() body: RaiseTicketDto,
+  ): Promise<TicketResponseDto | GuestTicketResponseDto> {
+    const user = this.contextService.context.user;
+
+    if (user) {
+      if (!body.subject) {
+        throw new BadRequestException('subject is required');
+      }
+
+      const ticket = await this.ticketService.raise(user.id, {
+        subject: body.subject,
+        description: body.description,
+        category: body.category,
+        referenceId: body.referenceId,
+        attachedFileIds: body.attachedFileIds,
+        preferredContactMethods: body.preferredContactMethods,
+      });
+
+      return TicketResponseDto.mapFromEntity(ticket);
+    }
+
+    if (!body.fullName || !body.email) {
+      throw new BadRequestException(
+        'fullName and email are required for guest tickets',
+      );
+    }
+
+    const ticket = await this.guestTicketService.create({
+      fullName: body.fullName,
+      email: body.email,
+      category: body.category,
+      description: body.description,
+      attachedFileIds: body.attachedFileIds,
+      preferredContactMethods: body.preferredContactMethods,
+    });
+
+    return GuestTicketResponseDto.mapFromEntity(ticket);
+  }
+
+  @Post(':id/cancel')
+  @CancelTicketOpenApi()
+  @Protected([UserRole.Bidder, UserRole.Seller, UserRole.Retailer])
+  async cancel(@Param('id') id: string) {
+    const userId = this.contextService.context.user.id;
+
+    await this.ticketService.cancel(id, userId);
+  }
+
+  @Delete(':id')
+  @DeleteTicketOpenApi()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async softDelete(@Param('id') id: string) {
+    const userId = this.contextService.context.user.id;
+
+    await this.ticketService.softDelete(id, userId);
+  }
+}

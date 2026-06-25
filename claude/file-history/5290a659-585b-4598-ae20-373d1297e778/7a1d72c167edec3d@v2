@@ -1,0 +1,5 @@
+import { OurMethodPage } from "@/pages-layer/services/our-method/ui/our-method";
+
+export default function Page() {
+  return <OurMethodPage />;
+}

@@ -1,0 +1,105 @@
+{
+  "version": 2,
+  "plugins": {
+    "context7@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/context7/unknown",
+        "version": "unknown",
+        "installedAt": "2026-02-20T14:59:27.459Z",
+        "lastUpdated": "2026-03-25T10:41:39.436Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "playwright@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/playwright/unknown",
+        "version": "unknown",
+        "installedAt": "2026-02-20T14:59:52.148Z",
+        "lastUpdated": "2026-03-25T10:41:39.445Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "frontend-design@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/frontend-design/unknown",
+        "version": "unknown",
+        "installedAt": "2026-02-20T15:00:34.386Z",
+        "lastUpdated": "2026-03-25T10:41:39.480Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "code-review@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/code-review/unknown",
+        "version": "unknown",
+        "installedAt": "2026-02-20T15:00:38.897Z",
+        "lastUpdated": "2026-03-25T10:41:39.474Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "github@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/github/unknown",
+        "version": "unknown",
+        "installedAt": "2026-02-20T15:00:48.849Z",
+        "lastUpdated": "2026-03-25T10:41:39.441Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "feature-dev@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/feature-dev/unknown",
+        "version": "unknown",
+        "installedAt": "2026-02-20T15:00:54.202Z",
+        "lastUpdated": "2026-03-25T10:41:39.484Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "code-simplifier@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/code-simplifier/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-20T15:00:57.403Z",
+        "lastUpdated": "2026-02-20T15:00:57.403Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "typescript-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/typescript-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-20T15:01:03.105Z",
+        "lastUpdated": "2026-02-20T15:01:03.105Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ],
+    "figma@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/figma/2.1.30",
+        "version": "2.1.30",
+        "installedAt": "2026-03-16T15:32:49.132Z",
+        "lastUpdated": "2026-04-29T09:19:20.532Z",
+        "gitCommitSha": "f046182e32c8160b1254ad12ec8318f9a9aa50b5"
+      }
+    ],
+    "claude-code-setup@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/ilyakonyaev/.claude/plugins/cache/claude-plugins-official/claude-code-setup/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-20T15:01:31.473Z",
+        "lastUpdated": "2026-02-20T15:01:31.473Z",
+        "gitCommitSha": "8deab8460a9d4df5a01315ef722a5ca6b061c074"
+      }
+    ]
+  }
+}

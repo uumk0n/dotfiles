@@ -1,0 +1,18 @@
+[Nest] 94042  - 04/23/2026, 10:18:58 AM   ERROR [ExceptionHandler] UndefinedModuleException [Error]: Nest cannot create the FileModule instance.
+The module at index [0] of the FileModule "imports" array is undefined.
+
+Potential causes:
+- A circular dependency between modules. Use forwardRef() to avoid it. Read more: https://docs.nestjs.com/fundamentals/circular-dependency
+- The module at index [0] is of type "undefined". Check your import statements and the type of the module.
+
+Scope [RootModule -> ApiModule -> AdminApiModule -> WithdrawalRequestsApiModule]
+    at DependenciesScanner.scanForModules (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/scanner.js:64:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async DependenciesScanner.scanForModules (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/scanner.js:72:32)
+    at async DependenciesScanner.scanForModules (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/scanner.js:72:32)
+    at async DependenciesScanner.scanForModules (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/scanner.js:72:32)
+    at async DependenciesScanner.scanForModules (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/scanner.js:72:32)
+    at async DependenciesScanner.scan (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/scanner.js:28:9)
+    at async /Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/nest-factory.js:111:17
+    at async ExceptionsZone.asyncRun (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/errors/exceptions-zone.js:22:13)
+    at async NestFactoryStatic.initialize (/Users/ilyakonyaev/work/coddtech/lux/luxflow-be/node_modules/.pnpm/@nestjs+core@11.1.12_@nestjs+common@11.1.12_class-transformer@0.5.1_class-validator@0.1_28e844e3f4b8f6c7493ea481a3769f1a/node_modules/@nestjs/core/nest-factory.js:110:13)

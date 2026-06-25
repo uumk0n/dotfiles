@@ -1,0 +1,549 @@
+import { UserNotConfirmedException } from '@aws-sdk/client-cognito-identity-provider';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { TransactionHost } from '@nestjs-cls/transactional';
+
+import { UserService } from '@/modules/user';
+import { TransactionalAdapterTypeOrm } from '@/modules/global';
+import {
+  MediaType,
+  OtpEntity,
+  OtpType,
+  UserEntity,
+  UserRole,
+  UserStatus,
+} from '@/db';
+
+import { CognitoService } from './cognito.service';
+import { SocialAuthService } from './social-auth.service';
+import { env, isDevelopment } from '@/env';
+import { OtpService } from '@/modules/otp';
+import { NotificationService } from '@/modules/notification';
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly cognitoService: CognitoService,
+    private readonly txHost: TransactionHost<TransactionalAdapterTypeOrm>,
+    private readonly userService: UserService,
+    private readonly otpService: OtpService,
+    private readonly notificationService: NotificationService,
+    private readonly socialAuthService: SocialAuthService,
+    private readonly jwtService: JwtService,
+  ) {}
+
+  async signupWithoutConfirmation(dto: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    patronymic?: string | null;
+    phone: string;
+    roles: UserRole[];
+  }) {
+    const { email, firstName, lastName, patronymic, phone, roles } = dto;
+
+    // Send invite admin with temp password
+    const { tempPassword } =
+      await this.cognitoService.signupWithoutConfirmation(dto);
+
+    const user = await this.userService.create({
+      email,
+      firstName,
+      lastName,
+      patronymic,
+      phone,
+      roles,
+      status: UserStatus.Active,
+    });
+
+    await this.notificationService.sendInvite({
+      email,
+      firstName,
+      lastName,
+      patronymic,
+      role: roles[0],
+      tempPassword,
+    });
+
+    return { user, tempPassword };
+  }
+
+  async signUp(dto: {
+    password: string;
+    firstName: string;
+    lastName: string;
+    patronymic?: string | null;
+    phoneOtpId: string;
+    emailOtpId: string;
+    role: UserRole;
+  }) {
+    const {
+      password,
+      firstName,
+      lastName,
+      patronymic,
+      phoneOtpId,
+      emailOtpId,
+    } = dto;
+
+    this.logger.log(
+      `[signUp] Start: emailOtpId=${emailOtpId}, phoneOtpId=${phoneOtpId}, role=${dto.role}`,
+    );
+
+    const emailOtp = await this.otpService.findApproved(
+      emailOtpId,
+      OtpType.SignUp,
+      MediaType.Email,
+    );
+
+    this.logger.log(`[signUp] Email OTP approved for: ${emailOtp.sentTo}`);
+
+    const phoneOtp = await this.otpService.findApproved(
+      phoneOtpId,
+      OtpType.SignUp,
+      MediaType.Phone,
+    );
+
+    this.logger.log(`[signUp] Phone OTP approved for: ${phoneOtp.sentTo}`);
+
+    const emailExists = await this.emailExists(emailOtp.sentTo);
+
+    if (emailExists) {
+      this.logger.warn(
+        `[signUp] Rejected: email already exists — ${emailOtp.sentTo}`,
+      );
+      throw new BadRequestException('User with this email already exists');
+    }
+
+    const phoneExists = await this.phoneExists(phoneOtp.sentTo);
+
+    if (phoneExists) {
+      this.logger.warn(
+        `[signUp] Rejected: phone already exists — ${phoneOtp.sentTo}`,
+      );
+      throw new BadRequestException('User with this phone already exists');
+    }
+
+    try {
+      if (!env.AWS_COGNITO_SKIP) {
+        this.logger.log(
+          `[signUp] Creating Cognito user for: ${emailOtp.sentTo}`,
+        );
+        await this.cognitoService.signUp({
+          email: emailOtp.sentTo,
+          firstName,
+          lastName,
+          patronymic,
+          password,
+        });
+        this.logger.log(
+          `[signUp] Cognito user created successfully for: ${emailOtp.sentTo}`,
+        );
+      }
+
+      this.logger.log(`[signUp] Creating DB user for: ${emailOtp.sentTo}`);
+      await this.userService.create({
+        email: emailOtp.sentTo,
+        phone: phoneOtp.sentTo,
+        firstName,
+        lastName,
+        patronymic,
+        roles: [dto.role],
+        status: UserStatus.Active,
+      });
+      this.logger.log(
+        `[signUp] DB user created successfully for: ${emailOtp.sentTo}`,
+      );
+
+      await this.otpService.removeOtp([emailOtpId, phoneOtpId]);
+
+      this.logger.log(
+        `[signUp] Signing in after registration for: ${emailOtp.sentTo}`,
+      );
+      return this.signIn({
+        email: emailOtp.sentTo,
+        password,
+      });
+    } catch (error) {
+      const errorName =
+        error?.name ?? error?.constructor?.name ?? 'UnknownError';
+      const errorMessage = error?.message ?? String(error);
+      const errorCode =
+        error?.$metadata?.httpStatusCode ?? error?.code ?? 'N/A';
+
+      this.logger.error(
+        `[signUp] Failed for email=${emailOtp?.sentTo}, phone=${phoneOtp?.sentTo}: [${errorName}] (HTTP ${errorCode}) ${errorMessage}`,
+        error?.stack,
+      );
+
+      // todo: handle invalid passwords separately
+      if (error instanceof UserNotConfirmedException) {
+        throw new BadRequestException('Invalid password');
+      } else {
+        throw new InternalServerErrorException();
+      }
+    }
+  }
+
+  async signIn(dto: { email: string; password: string }) {
+    const result = await this.cognitoService.signIn(dto.email, dto.password);
+
+    const user = await this.txHost.tx.getRepository(UserEntity).findOne({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      await this.cognitoService.deleteUser(dto.email);
+      throw new UnauthorizedException('Email is not registered');
+    }
+
+    // Check if we got a challenge (temporary password case)
+    if (result.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+      return {
+        status: 'CHALLENGE',
+        challengeName: result.ChallengeName,
+        session: result.Session,
+        challengeParameters: result.ChallengeParameters,
+        message: 'Temporary password detected. New password required.',
+      };
+    }
+
+    if (result.AuthenticationResult?.AccessToken) {
+      return {
+        status: 'SUCCESS',
+        payload: {
+          accessToken: isDevelopment()
+            ? dto.email
+            : result.AuthenticationResult.AccessToken,
+          refreshToken: result.AuthenticationResult.RefreshToken,
+          idToken: result.AuthenticationResult.IdToken,
+        },
+      };
+    }
+
+    return {
+      status: 'FAILED',
+      message: 'Authentication failed',
+    };
+  }
+
+  async resendConfirmationCode(email: string) {
+    try {
+      await this.cognitoService.resendConfirmationCode(email);
+      return {
+        status: 'SUCCESS',
+        message: 'Confirmation code resent',
+      };
+    } catch (error) {
+      return {
+        status: 'FAILED',
+        message: error.message,
+      };
+    }
+  }
+
+  async respondToNewPasswordChallenge(dto: {
+    email: string;
+    newPassword: string;
+    session: string;
+  }) {
+    const { email, newPassword, session } = dto;
+
+    try {
+      const result = await this.cognitoService.respondToNewPasswordChallenge(
+        email,
+        newPassword,
+        session,
+      );
+
+      if (result.AuthenticationResult?.AccessToken) {
+        return {
+          status: 'SUCCESS',
+          payload: {
+            accessToken: result.AuthenticationResult.AccessToken,
+            refreshToken: result.AuthenticationResult.RefreshToken,
+            idToken: result.AuthenticationResult.IdToken,
+          },
+        };
+      }
+
+      return {
+        status: 'FAILED',
+        message: 'Authentication failed',
+      };
+    } catch (error) {
+      return {
+        status: 'FAILED',
+        message: error.message,
+      };
+    }
+  }
+
+  async refreshToken(payload: { refreshToken: string; accessToken: string }) {
+    const { refreshToken, accessToken } = payload;
+
+    const result = await this.cognitoService.refreshToken(
+      refreshToken,
+      accessToken,
+    );
+
+    if (result.AuthenticationResult) {
+      return {
+        accessToken: isDevelopment()
+          ? accessToken
+          : result.AuthenticationResult.AccessToken,
+        refreshToken: refreshToken,
+        idToken: result.AuthenticationResult.IdToken,
+      };
+    } else {
+      throw new UnauthorizedException('Refresh token failed');
+    }
+  }
+
+  async signInWithGoogle(code: string) {
+    const args = await this.cognitoService.signInWithSocial(
+      code,
+      `${this.configService.get<string>('CORE_PUBLIC_URL')}/auth/oauth/google/callback`,
+    );
+
+    return this.signInWithSocial(args);
+  }
+
+  async signInWithApple(code: string) {
+    const args = await this.cognitoService.signInWithSocial(
+      code,
+      `${this.configService.get<string>('CORE_PUBLIC_URL')}/auth/oauth/apple/callback`,
+    );
+
+    return this.signInWithSocial(args);
+  }
+
+  private async signInWithSocial(args: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    picture?: string | null;
+    accessToken: string;
+    refreshToken: string;
+  }) {
+    const { email, firstName, lastName, picture, accessToken, refreshToken } = args;
+
+    const userRepository = this.txHost.tx.getRepository(UserEntity);
+
+    let user = await userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      user = await this.userService.create({
+        email,
+        firstName: firstName || '',
+        lastName: lastName || '',
+        patronymic: null,
+        roles: [UserRole.Seller],
+        status: UserStatus.Active,
+        phone: '',
+      });
+    }
+
+    if (!user.photoFileId && picture) {
+      const file = await this.socialAuthService.uploadAvatarFromUrl(picture);
+      if (file) {
+        await userRepository.update(user.id, { photoFileId: file.id });
+      }
+    }
+
+    return {
+      status: 'SUCCESS',
+      payload: {
+        accessToken,
+        refreshToken,
+      },
+    };
+  }
+
+  async signOut(accessToken: string) {
+    if (env.AWS_COGNITO_SKIP) {
+      return;
+    }
+
+    await this.cognitoService.signOut(accessToken);
+  }
+
+  async emailExists(email: string) {
+    const user = await this.txHost.tx.getRepository(UserEntity).findOne({
+      where: { email },
+    });
+
+    return !!user;
+  }
+
+  async phoneExists(phone: string) {
+    const user = await this.txHost.tx.getRepository(UserEntity).findOne({
+      where: { phone },
+    });
+
+    return !!user;
+  }
+
+  async signInWithGoogleNative(idToken: string) {
+    const { email, firstName, lastName, picture } =
+      await this.socialAuthService.verifyGoogleToken(idToken);
+
+    return this.txHost.withTransaction(async () => {
+      const userRepo = this.txHost.tx.getRepository(UserEntity);
+      let user = await userRepo.findOne({ where: { email } });
+
+      if (!user) {
+        user = await this.userService.create({
+          email,
+          firstName,
+          lastName,
+          patronymic: null,
+          roles: [UserRole.Seller],
+          status: UserStatus.Active,
+          phone: '',
+        });
+      }
+
+      if (!user.photoFileId && picture) {
+        const file = await this.socialAuthService.uploadAvatarFromUrl(picture);
+        if (file) {
+          await userRepo.update(user.id, { photoFileId: file.id });
+        }
+      }
+
+      return this.issueSocialTokens(user.email);
+    });
+  }
+
+  async signInWithAppleNative(dto: {
+    identityToken: string;
+    firstName?: string;
+    lastName?: string;
+  }) {
+    const { appleUserId, email } =
+      await this.socialAuthService.verifyAppleToken(dto.identityToken);
+
+    return this.txHost.withTransaction(async () => {
+      const userRepo = this.txHost.tx.getRepository(UserEntity);
+
+      let user = await userRepo.findOne({ where: { appleUserId } });
+
+      if (!user && email) {
+        user = await userRepo.findOne({ where: { email } });
+      }
+
+      if (!user) {
+        if (!email) {
+          throw new UnauthorizedException(
+            'Email is required for first-time Apple sign-in',
+          );
+        }
+
+        user = await this.userService.create({
+          email,
+          firstName: dto.firstName ?? '',
+          lastName: dto.lastName ?? '',
+          patronymic: null,
+          roles: [UserRole.Seller],
+          status: UserStatus.Active,
+          phone: '',
+        });
+      }
+
+      if (!user.appleUserId) {
+        await userRepo.update(user.id, { appleUserId });
+      }
+
+      return this.issueSocialTokens(user.email);
+    });
+  }
+
+  private issueSocialTokens(email: string) {
+    const payload = { sub: email };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
+
+    return {
+      status: 'SUCCESS',
+      payload: { accessToken, refreshToken },
+    };
+  }
+
+  async forgotPassword(dto: {
+    email?: string;
+    phone?: string;
+    mediaType: MediaType;
+  }) {
+    const userRepository = this.txHost.tx.getRepository(UserEntity);
+
+    const isEmail = dto.mediaType === MediaType.Email;
+    const source = isEmail ? dto.email! : dto.phone!;
+
+    const user = await userRepository.findOne({
+      where: isEmail ? { email: source } : { phone: source },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const otpResponse = await this.otpService.sendOtp([
+      {
+        source,
+        type: OtpType.ForgotPassword,
+        mediaType: dto.mediaType,
+      },
+    ]);
+
+    return {
+      status: 'SUCCESS',
+      message: isEmail
+        ? 'Password reset code sent to your email'
+        : 'Password reset code sent to your phone',
+      ...(otpResponse.otp ? { otp: otpResponse.otp } : {}),
+    };
+  }
+
+  async confirmForgotPassword(dto: { otpId: string; newPassword: string }) {
+    try {
+      const otpRepository = this.txHost.tx.getRepository(OtpEntity);
+
+      const otp = await otpRepository.findOne({
+        where: {
+          id: dto.otpId,
+          approved: true,
+          type: OtpType.ForgotPassword,
+        },
+      });
+
+      if (!otp) {
+        throw new UnauthorizedException('Invalid OTP');
+      }
+
+      if (!env.AWS_COGNITO_SKIP) {
+        await this.cognitoService.changePassword(otp.sentTo, dto.newPassword);
+      }
+
+      return {
+        status: 'SUCCESS',
+        message: 'Password reset successfully',
+      };
+    } catch (error) {
+      return {
+        status: 'FAILED',
+        message: error.message,
+      };
+    }
+  }
+}

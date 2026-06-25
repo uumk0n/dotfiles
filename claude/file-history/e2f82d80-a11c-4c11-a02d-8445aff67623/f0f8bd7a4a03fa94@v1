@@ -1,0 +1,224 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { TransactionHost } from '@nestjs-cls/transactional';
+
+import { CryptoNetwork, SavedCryptoAddressEntity, WalletEntity } from '@/db';
+import { TransactionalAdapterTypeOrm } from '@/modules/global';
+import {
+  isValidTronAddress,
+  normalizeTronAddress,
+} from '@/common/crypto-utils';
+
+interface CreateCryptoAddressData {
+  network: CryptoNetwork;
+  address: string;
+  label: string;
+  setAsDefault?: boolean;
+}
+
+interface UpdateCryptoAddressData {
+  label?: string;
+  setAsDefault?: boolean;
+}
+
+@Injectable()
+export class CryptoAddressesService {
+  constructor(
+    private readonly txHost: TransactionHost<TransactionalAdapterTypeOrm>,
+  ) {}
+
+  /**
+   * Save a new cryptocurrency wallet address.
+   * Validates address format and prevents duplicates.
+   */
+  async create(
+    userId: string,
+    data: CreateCryptoAddressData,
+  ): Promise<SavedCryptoAddressEntity> {
+    return this.txHost.withTransaction(async () => {
+      const repository = this.txHost.tx.getRepository(SavedCryptoAddressEntity);
+
+      // Normalize address
+      const normalizedAddress = normalizeTronAddress(data.address);
+
+      // Validate address format based on network
+      switch (data.network) {
+        case CryptoNetwork.Tron:
+          if (!isValidTronAddress(normalizedAddress)) {
+            throw new BadRequestException(
+              'Invalid Tron address. Must start with T, be 34 characters, and base58 encoded.',
+            );
+          }
+          break;
+        // Future networks can be added here:
+        // case CryptoNetwork.Ethereum:
+        //   if (!isValidEthereumAddress(normalizedAddress)) { ... }
+        //   break;
+      }
+
+      const walletRepository = this.txHost.tx.getRepository(WalletEntity);
+
+      const wallet = await walletRepository.findOne({
+        where: { userId },
+      });
+
+      // Check for duplicate address for this user
+      const existingAddress = await repository.findOne({
+        where: {
+          walletId: wallet!.id,
+          address: normalizedAddress,
+        },
+      });
+
+      if (existingAddress) {
+        throw new ConflictException('This address is already saved');
+      }
+
+      // Handle default setting
+      if (data.setAsDefault) {
+        await repository
+          .createQueryBuilder()
+          .update(SavedCryptoAddressEntity)
+          .set({ isDefault: false })
+          .where('wallet_id = :walletId', { walletId: wallet!.id })
+          .execute();
+      }
+
+      // Save address
+      const addressData: Partial<SavedCryptoAddressEntity> = {
+        walletId: wallet!.id,
+        network: data.network,
+        address: normalizedAddress,
+        label: data.label,
+        isDefault: data.setAsDefault || false,
+      };
+
+      return repository.save(addressData);
+    });
+  }
+
+  /**
+   * Get all saved cryptocurrency addresses for a user.
+   * Ordered by default first, then by creation date.
+   */
+  async getMany(userId: string): Promise<SavedCryptoAddressEntity[]> {
+    const repository = this.txHost.tx.getRepository(SavedCryptoAddressEntity);
+
+    return repository.find({
+      where: { wallet: { userId } },
+      order: {
+        isDefault: 'DESC',
+        createdAt: 'DESC',
+      },
+    });
+  }
+
+  /**
+   * Get a single saved cryptocurrency address by ID.
+   */
+  async getOne(
+    userId: string,
+    addressId: string,
+  ): Promise<SavedCryptoAddressEntity> {
+    const repository = this.txHost.tx.getRepository(SavedCryptoAddressEntity);
+
+    const address = await repository.findOne({
+      where: { id: addressId, wallet: { userId } },
+    });
+
+    if (!address) {
+      throw new NotFoundException('Crypto address not found');
+    }
+
+    return address;
+  }
+
+  /**
+   * Update a saved cryptocurrency address (label, default status).
+   */
+  async update(
+    userId: string,
+    addressId: string,
+    data: UpdateCryptoAddressData,
+  ): Promise<SavedCryptoAddressEntity> {
+    return this.txHost.withTransaction(async () => {
+      const repository = this.txHost.tx.getRepository(SavedCryptoAddressEntity);
+
+      const address = await repository.findOne({
+        where: { id: addressId, wallet: { userId } },
+      });
+
+      if (!address) {
+        throw new NotFoundException('Crypto address not found');
+      }
+
+      // Handle default setting (atomic update)
+      if (data.setAsDefault) {
+        // Unset all other defaults for this user
+        await repository
+          .createQueryBuilder()
+          .update(SavedCryptoAddressEntity)
+          .set({ isDefault: false })
+          .where('wallet_id = :walletId', { walletId: address.walletId })
+          .andWhere('id != :addressId', { addressId })
+          .execute();
+
+        address.isDefault = true;
+      }
+
+      // Update label if provided
+      if (data.label !== undefined) {
+        address.label = data.label;
+      }
+
+      await repository.save(address);
+
+      const result = await repository.findOne({
+        where: { id: addressId },
+      });
+
+      if (!result) {
+        throw new Error('Crypto address not found after update');
+      }
+
+      return result;
+    });
+  }
+
+  /**
+   * Delete (soft delete) a saved cryptocurrency address.
+   */
+  async delete(userId: string, addressId: string): Promise<void> {
+    return this.txHost.withTransaction(async () => {
+      const repository = this.txHost.tx.getRepository(SavedCryptoAddressEntity);
+
+      const address = await repository.findOne({
+        where: { id: addressId, wallet: { userId } },
+      });
+
+      if (!address) {
+        throw new NotFoundException('Crypto address not found');
+      }
+
+      // Soft delete
+      await repository.softDelete({ id: addressId });
+
+      // If this was the default, promote another address (optional)
+      if (address.isDefault) {
+        const nextAddress = await repository.findOne({
+          where: { wallet: { userId } },
+          order: { createdAt: 'DESC' },
+        });
+
+        if (nextAddress) {
+          nextAddress.isDefault = true;
+          await repository.save(nextAddress);
+        }
+      }
+    });
+  }
+}

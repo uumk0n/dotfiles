@@ -1,0 +1,11 @@
+import { Module } from '@nestjs/common';
+
+import { TicketAdminService, TicketService } from './services';
+import { NotificationModule } from '@/modules/notification';
+
+@Module({
+  imports: [NotificationModule],
+  providers: [TicketService, TicketAdminService],
+  exports: [TicketService, TicketAdminService],
+})
+export class TicketModule {}

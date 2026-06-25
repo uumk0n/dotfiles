@@ -1,0 +1,490 @@
+import { ApiProperty } from '@nestjs/swagger';
+
+import {
+  AssetEntity,
+  AssetHandoverEntity,
+  AssetHandoverOption,
+  AssetHandoverStatus,
+  AssetHandoverType,
+  AssetMeta,
+  AssetValuationEntity,
+  AssetValuationSLA,
+  AssetValuationStatus,
+  AuthenticatorEntity,
+  BuybackEntity,
+  BuybackOfferEntity,
+  BuybackRequestEntity,
+  BuybackRequestStage,
+  BuybackRequestStatus,
+  BuybackStatus,
+  BuybackType,
+  CategoryEntity,
+  CourierPartnerEntity,
+  CustodyLocationEntity,
+} from '@/db';
+import { Type } from 'class-transformer';
+import { UserDto } from '@/api/admin';
+import { AssetCondition } from '../../../../db/entities/enums/asset-condition.enum';
+
+class CategoryDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  id: string;
+
+  @ApiProperty({ example: 'Electronics' })
+  name: string;
+
+  static mapFromEntity(entity: CategoryEntity): CategoryDto {
+    return {
+      id: entity.id,
+      name: entity.name,
+    };
+  }
+}
+
+class AssetDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  id: string;
+
+  @ApiProperty({ type: CategoryDto })
+  @Type(() => CategoryDto)
+  category: CategoryDto;
+
+  @ApiProperty()
+  declarationFormId: string | null;
+
+  @ApiProperty()
+  podId: string | null;
+
+  @ApiProperty()
+  openBoxVideoId: string | null;
+
+  @ApiProperty({
+    example: {
+      photos: {
+        order: ['123e4567-e89b-12d3-a456-426614174000'],
+        main: '123e4567-e89b-12d3-a456-426614174000',
+      },
+    },
+  })
+  meta: AssetMeta;
+
+  @ApiProperty({
+    description: 'Photo file IDs',
+    type: [String],
+    example: ['123e4567-e89b-12d3-a456-426614174000'],
+  })
+  photos: string[];
+
+  @ApiProperty()
+  @Type(() => AdminAssetHandoverDto)
+  handover: AdminAssetHandoverDto | null;
+
+  @ApiProperty()
+  categoryFields: Record<string, any>;
+
+
+  static mapFromEntity(entity: AssetEntity): AssetDto {
+    const handover = entity.handovers?.find(
+      (handover) => handover.type === AssetHandoverType.SellerToPlatform,
+    );
+
+    const fields = entity.categoryFields || {};
+
+    return {
+      id: entity.id,
+      photos: entity.photos ? entity.photos.map((photo) => photo.id) : [],
+      category: CategoryDto.mapFromEntity(entity.category),
+      meta: entity.meta,
+      declarationFormId: entity.declarationFormId,
+      podId: entity.podId,
+      openBoxVideoId: entity.openBoxVideoId,
+      handover: handover ? AdminAssetHandoverDto.mapFromEntity(handover) : null,
+      categoryFields: fields,
+    };
+  }
+}
+
+class BuybackRequestEventDto {
+  @ApiProperty({ enum: BuybackRequestStatus })
+  status: BuybackRequestStatus;
+
+  @ApiProperty({ enum: BuybackRequestStage })
+  stage: BuybackRequestStage;
+
+  @ApiProperty({ example: '2024-10-08T10:00:00Z' })
+  timestamp: Date;
+}
+
+class AdminBuybackDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  id: string;
+
+  @ApiProperty({ enum: BuybackType, example: BuybackType.Buyback })
+  type: BuybackType;
+
+  @ApiProperty({ enum: BuybackStatus, example: BuybackStatus.Quote })
+  status: BuybackStatus;
+
+  @ApiProperty({ type: AssetDto })
+  @Type(() => AssetDto)
+  asset: AssetDto;
+
+  static mapFromEntity(entity: BuybackEntity): AdminBuybackDto {
+    return {
+      id: entity.id,
+      type: entity.type,
+      status: entity.status,
+      asset: AssetDto.mapFromEntity(entity.asset),
+    };
+  }
+}
+
+class AdminOfferDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  id: string;
+
+  @ApiProperty({ example: 'BUYBACK_OFFER' })
+  type: string;
+
+  @ApiProperty({
+    description: 'Offer data',
+    example: { amount: 500, currency: 'USD' },
+  })
+  data: any;
+
+  static mapFromEntity(entity: BuybackOfferEntity): AdminOfferDto | null {
+    if (!entity) return null;
+    return {
+      id: entity.id,
+      type: entity.type,
+      data: entity.data,
+    };
+  }
+}
+
+class CourierPartnerDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  id: string;
+
+  @ApiProperty({ example: 'DHL' })
+  name: string;
+
+  static mapFromEntity(entity: CourierPartnerEntity): CourierPartnerDto | null {
+    if (!entity) return null;
+    return {
+      id: entity.id,
+      name: entity.name,
+    };
+  }
+}
+
+class CustodyLocationDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  id: string;
+
+  @ApiProperty({ example: 'Main Warehouse' })
+  name: string;
+
+  static mapFromEntity(
+    entity: CustodyLocationEntity,
+  ): CustodyLocationDto | null {
+    if (!entity) return null;
+    return {
+      id: entity.id,
+      name: entity.name,
+    };
+  }
+}
+
+export class AdminAssetHandoverDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  id: string;
+
+  @ApiProperty({
+    enum: AssetHandoverType,
+    example: AssetHandoverType.SellerToPlatform,
+  })
+  type: AssetHandoverType;
+
+  @ApiProperty({
+    enum: AssetHandoverStatus,
+    example: AssetHandoverStatus.Pending,
+  })
+  status: AssetHandoverStatus;
+
+  @ApiProperty({
+    enum: AssetHandoverOption,
+    example: AssetHandoverOption.InPerson,
+  })
+  option: AssetHandoverOption;
+
+  @ApiProperty({ type: CourierPartnerDto })
+  @Type(() => CourierPartnerDto)
+  courierPartner: CourierPartnerDto | null;
+
+  @ApiProperty({ example: 'TRACK123456' })
+  courierNumber: string | null;
+
+  @ApiProperty({ example: '2024-10-15T10:00:00Z' })
+  visitDate: Date | null;
+
+  @ApiProperty({ type: CustodyLocationDto })
+  @Type(() => CustodyLocationDto)
+  toCustodyLocation: CustodyLocationDto | null;
+
+  static mapFromEntity(entity: AssetHandoverEntity): AdminAssetHandoverDto {
+    return {
+      id: entity.id,
+      type: entity.type,
+      status: entity.status,
+      option: entity.option,
+      courierPartner: entity.courierPartner
+        ? CourierPartnerDto.mapFromEntity(entity.courierPartner)
+        : null,
+      courierNumber: entity.courierNumber,
+      visitDate: entity.visitDate,
+      toCustodyLocation: entity.toCustodyLocation
+        ? CustodyLocationDto.mapFromEntity(entity.toCustodyLocation)
+        : null,
+    };
+  }
+}
+
+class AdminAuthenticatorDto {
+  id: string;
+  user: UserDto;
+
+  static mapFromEntity(entity: AuthenticatorEntity): AdminAuthenticatorDto {
+    return {
+      id: entity.id,
+      user: UserDto.mapFromEntity(entity.user),
+    };
+  }
+}
+
+export class AssetValuationDto {
+  @ApiProperty({
+    description: 'Buyback request identifier',
+    example: 'bb-request-123',
+  })
+  id: string;
+
+  @ApiProperty()
+  preAuthSla: AssetValuationSLA | null;
+
+  @ApiProperty()
+  postAuthSla: AssetValuationSLA | null;
+
+  @ApiProperty()
+  selectedAsPreAuth: boolean;
+
+  @ApiProperty()
+  selectedAsPostAuth: boolean;
+
+  @ApiProperty()
+  isActive: boolean;
+
+  @ApiProperty()
+  status: AssetValuationStatus;
+
+  @ApiProperty()
+  authenticator: AdminAuthenticatorDto;
+
+  @ApiProperty()
+  preAuthValue: number | null;
+
+  @ApiProperty()
+  postAuthValue: number | null;
+
+  @ApiProperty()
+  preAuthNote: string;
+
+  @ApiProperty()
+  postAuthNote: string;
+
+  @ApiProperty()
+  preAuthSubmittedAt: Date | null;
+
+  @ApiProperty()
+  postAuthSubmittedAt: Date | null;
+
+  @ApiProperty({ enum: AssetCondition, nullable: true })
+  condition: AssetCondition | null;
+
+  @ApiProperty()
+  isAuthentic: boolean | null;
+
+  static mapFromEntity(entity: AssetValuationEntity): AssetValuationDto {
+    return {
+      id: entity.id,
+      preAuthSla: entity.preAuthSla,
+      postAuthSla: entity.postAuthSla,
+      isActive: entity.isActive,
+      status: entity.status,
+      selectedAsPreAuth: entity.selectedAsPreAuth,
+      selectedAsPostAuth: entity.selectedAsPostAuth,
+      authenticator: AdminAuthenticatorDto.mapFromEntity(entity.authenticator),
+      preAuthValue: entity.preAuthValue,
+      postAuthValue: entity.postAuthValue,
+      preAuthNote: entity.preAuthNote,
+      postAuthNote: entity.postAuthNote,
+      preAuthSubmittedAt: entity.preAuthSubmittedAt,
+      postAuthSubmittedAt: entity.postAuthSubmittedAt,
+      isAuthentic: entity.isAuthentic,
+      condition: entity.condition,
+    };
+  }
+}
+
+export class BuybackRequestDto {
+  @ApiProperty({
+    description: 'Buyback request identifier',
+    example: 'bb-request-123',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Buyback request status',
+    enum: BuybackRequestStatus,
+    example: BuybackRequestStatus.New,
+  })
+  status: BuybackRequestStatus;
+
+  @ApiProperty({
+    description: 'Buyback request stage',
+    enum: BuybackRequestStage,
+    example: BuybackRequestStage.Quote,
+  })
+  stage: BuybackRequestStage;
+
+  @ApiProperty({
+    description: 'Buyback request data',
+    type: AdminBuybackDto,
+  })
+  buyback: AdminBuybackDto;
+
+  @ApiProperty({
+    description: 'Pre-auth offer data',
+    required: false,
+  })
+  preAuthOffer?: AdminOfferDto | null;
+
+  @ApiProperty({
+    description: 'Post-auth offer data',
+  })
+  postAuthOffer?: AdminOfferDto | null;
+
+  @ApiProperty({
+    description: 'Reject reason',
+    example: 'Asset is not authentic',
+    required: false,
+  })
+  rejectReason?: string;
+
+  @ApiProperty({
+    description: 'Events log',
+    type: 'array',
+    items: { type: 'object' },
+  })
+  eventsLog: Array<{
+    status: BuybackRequestStatus;
+    stage: BuybackRequestStage;
+    timestamp: Date;
+  }>;
+
+  @ApiProperty({
+    description: 'Seller information',
+    type: UserDto,
+  })
+  seller?: UserDto | null;
+
+  @ApiProperty({
+    description: 'Creation date',
+    example: '2023-01-01T00:00:00.000Z',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Last update date',
+    example: '2023-01-01T00:00:00.000Z',
+  })
+  updatedAt: Date;
+
+  static mapFromEntity(entity: BuybackRequestEntity): BuybackRequestDto {
+    return {
+      id: entity.id,
+      status: entity.status,
+      stage: entity.stage,
+      rejectReason: entity.rejectReason,
+      eventsLog: entity.eventsLog?.data || [],
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
+      seller: entity.buyback?.seller
+        ? UserDto.mapFromEntity(entity.buyback?.seller)
+        : null,
+      buyback: AdminBuybackDto.mapFromEntity(entity.buyback),
+      preAuthOffer: entity.preAuthOffer
+        ? AdminOfferDto.mapFromEntity(entity.preAuthOffer)
+        : null,
+      postAuthOffer: entity.postAuthOffer
+        ? AdminOfferDto.mapFromEntity(entity.postAuthOffer)
+        : null,
+    };
+  }
+}
+
+export class PreviewOfferResponseDto {
+  @ApiProperty({
+    description: 'Item valuation in cents',
+    example: 10000,
+  })
+  amountCents: number;
+
+  @ApiProperty({
+    description: 'Service fee in cents',
+    example: 100,
+  })
+  serviceFeeCents: number;
+
+  @ApiProperty({
+    description: 'Authentication fee in cents',
+    example: 50,
+  })
+  authenticationFeeCents: number;
+
+  @ApiProperty({
+    description: 'Custody fee in cents',
+    example: 75,
+  })
+  custodyFeeCents: number;
+
+  @ApiProperty({
+    description: 'Insurance fee in cents',
+    example: 60,
+  })
+  insuranceFeeCents: number;
+
+  @ApiProperty({
+    description: 'Platform fee in cents',
+    example: 40,
+  })
+  platformFeeCents: number;
+
+  @ApiProperty({
+    description: 'Total processing fees in cents (sum of all fees)',
+    example: 325,
+  })
+  processingFeeCents: number;
+
+  @ApiProperty({
+    description: 'VAT in cents',
+    example: 26,
+  })
+  vatCents: number;
+
+  @ApiProperty({
+    description: 'Amount user receives in cents',
+    example: 9649,
+  })
+  toBeReceivedCents: number;
+}

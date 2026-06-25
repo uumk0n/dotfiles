@@ -1,0 +1,32 @@
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+
+import { CryptoNetwork } from '@/db/entities/saved-crypto-address.entity';
+import { IsCryptoAddress } from '@/common/validators';
+
+/**
+ * DTO for saving a cryptocurrency wallet address.
+ * Address is validated against the specified network format before saving.
+ */
+export class CreateCryptoAddressDto {
+  @IsEnum(CryptoNetwork)
+  network: CryptoNetwork;
+
+  @IsString()
+  @MaxLength(100)
+  @IsCryptoAddress()
+  address: string;
+
+  @IsString()
+  @MaxLength(100)
+  label: string;
+
+  @IsOptional()
+  @IsBoolean()
+  setAsDefault?: boolean;
+}

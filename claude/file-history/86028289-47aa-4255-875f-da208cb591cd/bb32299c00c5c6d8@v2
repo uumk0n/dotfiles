@@ -1,0 +1,181 @@
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
+
+import { SupportedCurrency } from '@/common/currency';
+
+import { BaseEntity } from '../utils';
+
+import { AddressEntity } from './address.entity';
+import { BuybackEntity } from './buyback.entity';
+import { AdminEntity } from './admin.entity';
+import { WalletEntity } from './wallet.entity';
+import { KycEntity } from './kyc.entity';
+import { AssetHandoverEntity } from './asset-handover.entity';
+import { FileEntity } from './file.entity';
+
+export enum UserRole {
+  Seller = 'SELLER',
+  Bidder = 'BIDDER',
+  Retailer = 'RETAILER',
+  Authenticator = 'AUTHENTICATOR',
+  Admin = 'ADMIN',
+  SuperAdmin = 'SUPER_ADMIN',
+}
+
+export enum UserStatus {
+  Active = 'ACTIVE',
+  Inactive = 'INACTIVE',
+}
+
+export enum UserSetting {
+  Notifications = 'NOTIFICATIONS',
+  Currency = 'CURRENCY',
+}
+
+export interface UserNotificationsSetting {
+  general: boolean;
+  buyback: boolean;
+  authenticator: boolean;
+  accountSecurity: boolean;
+}
+
+export interface UserSettings {
+  [UserSetting.Notifications]: UserNotificationsSetting;
+  [UserSetting.Currency]: SupportedCurrency;
+}
+
+@Entity({
+  name: 'user',
+})
+export class UserEntity extends BaseEntity {
+  @Column({
+    type: 'varchar',
+    length: 255,
+    unique: true,
+  })
+  email: string;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  phone: string;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    name: 'first_name',
+  })
+  firstName: string;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    name: 'last_name',
+  })
+  lastName: string;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    name: 'patronymic',
+    nullable: true,
+  })
+  patronymic: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    array: true,
+  })
+  roles: UserRole[];
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+  })
+  selectedRole: UserRole;
+
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.Active,
+  })
+  status: UserStatus;
+
+  @Column({
+    type: 'jsonb',
+    default: {
+      NOTIFICATIONS: {
+        general: true,
+        buyback: true,
+        authenticator: true,
+        accountSecurity: true,
+      },
+      CURRENCY: 'AED',
+    },
+  })
+  settings: UserSettings;
+
+  @Index('idx_user_apple_user_id', { where: '"apple_user_id" IS NOT NULL' })
+  @Column({
+    type: 'varchar',
+    length: 255,
+    name: 'apple_user_id',
+    nullable: true,
+    unique: true,
+  })
+  appleUserId: string | null;
+
+  @Column({
+    type: 'boolean',
+    name: 'has_email_password',
+    default: false,
+  })
+  hasEmailPassword: boolean;
+
+  @Column({
+    type: 'varchar',
+    array: true,
+    name: 'linked_providers',
+    default: '{}',
+  })
+  linkedProviders: string[];
+
+  @Index('idx_user_photo_file_id')
+  @Column({ type: 'uuid', name: 'photo_file_id', nullable: true })
+  photoFileId: string | null;
+
+  @ManyToOne(() => FileEntity, { nullable: true })
+  @JoinColumn({ name: 'photo_file_id' })
+  photoFile: FileEntity | null;
+
+  @OneToOne(() => AddressEntity, (entity) => entity.user)
+  address?: AddressEntity;
+
+  @OneToMany(() => BuybackEntity, (entity) => entity.seller)
+  buybacks: BuybackEntity[];
+
+  @OneToOne(() => AdminEntity, (entity) => entity.user)
+  admin?: AdminEntity;
+
+  @OneToOne(() => WalletEntity, (entity) => entity.user)
+  wallet: WalletEntity;
+
+  @OneToOne(() => KycEntity, (entity) => entity.user)
+  kyc?: KycEntity;
+
+  @OneToMany(() => AssetHandoverEntity, (entity) => entity.toUser)
+  handoversTo: AssetHandoverEntity[];
+
+  @OneToMany(() => AssetHandoverEntity, (entity) => entity.fromUser)
+  handoversFrom: AssetHandoverEntity[];
+}

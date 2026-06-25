@@ -1,0 +1,8 @@
+import type { RaiseTicketDto } from "@/shared/types/ticket.types";
+
+export interface CreateTicketFormProps {
+  onSuccess?: (ticketId: string) => void;
+  onCancel?: () => void;
+}
+
+export interface CreateTicketFormData extends RaiseTicketDto {}

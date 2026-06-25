@@ -1,0 +1,31 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class UserCurrencySetting1774224000000 implements MigrationInterface {
+  name = 'UserCurrencySetting1774224000000';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      UPDATE "user"
+      SET settings = settings || '{"CURRENCY": "USD"}'::jsonb
+      WHERE NOT (settings ? 'CURRENCY')
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE "user"
+        ALTER COLUMN settings
+        SET DEFAULT '{"NOTIFICATIONS":{"general":true,"buyback":true,"authenticator":true,"accountSecurity":true},"CURRENCY":"USD"}'
+    `);
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      UPDATE "user" SET settings = settings - 'CURRENCY'
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE "user"
+        ALTER COLUMN settings
+        SET DEFAULT '{"NOTIFICATIONS":{"general":true,"buyback":true,"authenticator":true,"accountSecurity":true}}'
+    `);
+  }
+}

@@ -1,0 +1,125 @@
+# core
+# CORE_PUBLIC_URL: Frontend/app public URL
+CORE_PUBLIC_URL=https://api.double-plays.dev
+CORE_HOST=localhost
+CORE_PORT=3000
+CORE_ORIGINS=http://localhost:3000,https://www.double-plays.dev,https://double-plays.dev
+CORE_THROTTLE_ENABLED=true
+
+# swagger
+SWAGGER_ENDPOINT=/swagger
+
+# jwt
+JWT_SECRET=secret
+
+# email
+MAIL_HOST=host
+MAIL_PORT=465
+MAIL_FROM="User User <user@example.com>"
+MAIL_USER=user@example.com
+MAIL_PASSWORD="xxxx xxxx xxxx xxxx"
+MAIL_CONNECTIONS=1
+MAIL_MAX_CONNECTIONS=1
+MAIL_RATE_LIMIT=1
+MAIL_SECURE=true
+MAIL_TLS=true
+
+# AWS Cognito
+AWS_COGNITO_URL=
+AWS_COGNITO_REGION=
+AWS_COGNITO_USER_POOL_ID=
+AWS_COGNITO_CLIENT_ID=
+AWS_COGNITO_ACCESS_KEY_ID=
+AWS_COGNITO_SECRET_ACCESS_KEY=
+
+# AWS S3
+AWS_S3_REGION=
+AWS_S3_BUCKET=
+AWS_S3_ACCESS_KEY_ID=
+AWS_S3_SECRET_ACCESS_KEY=
+AWS_S3_UPLOAD_FILE_SIZE_LIMIT=10485760
+
+# database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=double_plays
+DB_USER=admin
+DB_PASSWORD=123456
+DB_AUTO_SYNCHRONIZE=false
+DB_AUTO_MIGRATIONS_RUN=false
+DB_LOGGING=false
+DB_SSL=false
+
+# rabbitmq
+RABBITMQ_CONNECTION_URL=amqp://guest:guest@localhost:5672
+
+# STRIPE CONFIGURATION
+STRIPE_SECRET_KEY=sk_test_your_secret_key_here
+# Get from: https://dashboard.stripe.com/test/webhooks
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+# Stripe Publishable Key (for frontend - optional, can be in FE env)
+STRIPE_PUBLISHABLE_KEY=pk_test_your_publishable_key_here
+
+# Stripe Connect (for payouts/withdrawals - Task 8)
+STRIPE_CONNECT_ENABLED=false
+
+# Stripe Configs
+STRIPE_CARD_FEE_PERCENT=2.9
+STRIPE_CARD_FEE_FIXED_CENTS=30
+MIN_DEPOSIT_AMOUNT_CENTS=1000
+
+# CRYPTO CONFIGURATION
+
+# Tron Network
+CRYPTO_NETWORK=tron
+CRYPTO_USDT_CONTRACT_TRON=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
+CRYPTO_RECEIVE_ADDRESS_TRON=your_tron_wallet_address_here
+CRYPTO_CONFIRMATIONS_TRON=20
+
+# Tronscan API (for transaction verification)
+CRYPTO_TRONSCAN_API_URL=https://apilist.tronscan.org
+CRYPTO_TRONSCAN_API_KEY=your_tronscan_api_key_here
+
+# TAX & FEES
+# Processing fee (in cents)
+PROCESSING_FEE_CENTS=22000
+
+# ENTRUPY CONFIGURATION
+# Enable Entrupy integration
+ENTRUPY_ENABLED=false
+# Entrupy API URL (defaults to https://api.entrupy.com/v2)
+ENTRUPY_API_URL=https://api.entrupy.com/v2
+# Entrupy API token for authentication
+ENTRUPY_API_TOKEN=your_entrupy_api_token_here
+# Entrupy webhook secret for signature verification
+ENTRUPY_WEBHOOK_SECRET=your_entrupy_webhook_secret_here
+#Paypal
+PAYPAL_CLIENT_ID=
+PAYPAL_CLIENT_SECRET=
+PAYPAL_MODE=
+PAYPAL_WEBHOOK_ID=
+
+# Crypto.com Pay Configuration
+# Get credentials from: https://merchant.crypto.com → Developers → API Keys
+CRYPTO_PAY_SECRET_KEY=your_crypto_pay_secret_key_here  # API Secret Key (sk_test_xxx or sk_live_xxx)
+CRYPTO_PAY_PUBLISHABLE_KEY=your_crypto_pay_publishable_key_here  # Publishable Key (pk_test_xxx or pk_live_xxx)
+CRYPTO_PAY_MODE=test  # 'test' or 'live'
+# Get from: Merchant Dashboard → Webhooks → Signature Secret (REQUIRED for webhook validation)
+CRYPTO_PAY_SIGNATURE_SECRET=your_crypto_pay_signature_secret_here  # Webhook Signature Secret (whsec_xxx)
+
+# NOWPayments Configuration
+# Get credentials from: https://account.nowpayments.io → API Keys
+NOWPAYMENTS_API_KEY=your_nowpayments_api_key_here
+# Payout auth (used to get Bearer token via /auth)
+NOWPAYMENTS_AUTH_EMAIL=your_nowpayments_email_here
+NOWPAYMENTS_AUTH_PASSWORD=your_nowpayments_password_here
+# API Base URL (default: https://api.nowpayments.io/v1)
+NOWPAYMENTS_BASE_URL=https://api.nowpayments.io/v1
+# IPN Callback URL - MUST be publicly accessible for NOWPayments to send webhooks
+# Examples:
+# - Production: https://api.your-domain.com
+# - Development with tunnel: https://your-tunnel-id.tunnel4.com
+# - DO NOT use http://localhost:3000 (webhooks won't work!)
+NOWPAYMENTS_IPN_URL=https://google.com
+# Optional: IPN Secret for webhook validation (get from NOWPayments dashboard)
+NOWPAYMENTS_IPN_SECRET=your_ipn_secret_here

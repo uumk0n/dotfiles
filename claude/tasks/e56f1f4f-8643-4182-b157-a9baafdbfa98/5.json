@@ -1,0 +1,9 @@
+{
+  "id": "5",
+  "subject": "Score issues and post final review",
+  "description": "Score each issue found, filter by confidence >= 80, and post the final review comment.",
+  "activeForm": "Scoring issues and posting review",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": []
+}

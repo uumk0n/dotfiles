@@ -1,0 +1,44 @@
+import { BuybackType } from '@/db';
+import {
+  NotificationContentType,
+  NotificationData,
+  NotificationMedia,
+  NotificationType,
+} from '../consts';
+
+type Data = NotificationData<NotificationType.QuoteRequestAdminNotification>;
+
+function getBuybackTypeLabel(type: BuybackType): string {
+  const labels: Record<BuybackType, string> = {
+    [BuybackType.Buyback]: 'Sale with Buyback',
+    [BuybackType.DirectSale]: 'Direct Sale',
+  };
+  return labels[type];
+}
+
+export const QUOTE_REQUEST_ADMIN_CONTENT: NotificationContentType = {
+  [NotificationMedia.Email]: (data: Data) => ({
+    subject: 'LuxFlow: New offer received',
+    text: [
+      'New offer received.',
+      `Item: ${getBuybackTypeLabel(data.buybackType)}`,
+      [data.asset.brandName, data.asset.referenceNumber].filter(Boolean).join(' '),
+      data.asset.condition,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  }),
+  [NotificationMedia.InApp]: (data: Data) => ({
+    title: 'New Offer Received',
+    body: `${getBuybackTypeLabel(data.buybackType)} – ${data.asset.categoryName}`,
+  }),
+  [NotificationMedia.Phone]: (data: Data) =>
+    [
+      'New offer received.',
+      `Item: ${getBuybackTypeLabel(data.buybackType)}`,
+      [data.asset.brandName, data.asset.referenceNumber].filter(Boolean).join(' '),
+      data.asset.condition,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+};

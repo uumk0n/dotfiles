@@ -1,0 +1,32 @@
+apps/api build: src/modules/auth/services/auth.service.ts:525:40 - error TS2345: Argument of type 'Partial<UserEntity>' is not assignable to parameter of type '_QueryDeepPartialEntity<UserEntity>'.
+Menu
+apps/api build:   Types of property 'photoFile' are incompatible.
+apps/api build:     Type 'FileEntity | null | undefined' is not assignable to type '(() => string) | _QueryDeepPartialEntity<FileEntity | null> | undefined'.
+apps/api build:       Type 'FileEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<FileEntity | null> | undefined'.
+apps/api build:         Type 'FileEntity' is not assignable to type '_QueryDeepPartialEntity<FileEntity>'.
+apps/api build:           Types of property 'assetPhoto' are incompatible.
+apps/api build:             Type 'AssetEntity | null' is not assignable to type '(() => string) | _QueryDeepPartialEntity<AssetEntity | null> | undefined'.
+apps/api build:               Type 'AssetEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<AssetEntity | null> | undefined'.
+apps/api build:                 Type 'AssetEntity' is not assignable to type '_QueryDeepPartialEntity<AssetEntity>'.
+apps/api build:                   Types of property 'custodyLocation' are incompatible.
+apps/api build:                     Type 'CustodyLocationEntity | null' is not assignable to type '(() => string) | _QueryDeepPartialEntity<CustodyLocationEntity | null> | undefined'.
+apps/api build:                       Type 'CustodyLocationEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<CustodyLocationEntity | null> | undefined'.
+apps/api build:                         Type 'CustodyLocationEntity' is not assignable to type '_QueryDeepPartialEntity<CustodyLocationEntity>'.
+apps/api build:                           Types of property 'custody' are incompatible.
+apps/api build:                             Type 'CustodyEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<CustodyEntity> | undefined'.
+apps/api build:                               Type 'CustodyEntity' is not assignable to type '_QueryDeepPartialEntity<CustodyEntity>'.
+apps/api build:                                 Types of property 'locations' are incompatible.
+apps/api build:                                   Type 'CustodyLocationEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<CustodyLocationEntity> | undefined'.
+apps/api build:                                     Type 'CustodyLocationEntity' is not assignable to type '_QueryDeepPartialEntity<CustodyLocationEntity>'.
+apps/api build:                                       Types of property 'address' are incompatible.
+apps/api build:                                         Type 'AddressEntity | null' is not assignable to type '(() => string) | _QueryDeepPartialEntity<AddressEntity | null> | undefined'.
+apps/api build:                                           Type 'AddressEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<AddressEntity | null> | undefined'.
+apps/api build:                                             Type 'AddressEntity' is not assignable to type '_QueryDeepPartialEntity<AddressEntity>'.
+apps/api build:                                               Types of property 'user' are incompatible.
+apps/api build:                                                 Type 'UserEntity | null' is not assignable to type '(() => string) | _QueryDeepPartialEntity<UserEntity | null> | undefined'.
+apps/api build:                                                   Type 'UserEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<UserEntity | null> | undefined'.
+apps/api build:                                                     Type 'UserEntity' is not assignable to type '_QueryDeepPartialEntity<UserEntity>'.
+apps/api build:                                                       Types of property 'address' are incompatible.
+apps/api build:                                                         Type 'AddressEntity | undefined' is not assignable to type '(() => string) | _QueryDeepPartialEntity<AddressEntity | undefined>'.
+apps/api build:                                                           Type 'AddressEntity' is not assignable to type '(() => string) | _QueryDeepPartialEntity<AddressEntity | undefined>'.
+apps/api build: 525         await userRepo.update(user.id, updates);

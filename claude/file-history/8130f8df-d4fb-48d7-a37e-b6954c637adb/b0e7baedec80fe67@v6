@@ -1,0 +1,115 @@
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { TransactionHost } from '@nestjs-cls/transactional';
+import { OAuth2Client } from 'google-auth-library';
+import appleSignin from 'apple-signin-auth';
+import axios from 'axios';
+import { v4 as uuid } from 'uuid';
+
+import { FileEntity, FileStatus } from '@/db';
+import { MimeType } from '@/common';
+import { TransactionalAdapterTypeOrm } from '@/modules/global';
+import { StorageService } from '@/modules/file';
+import { env } from '@/env';
+
+const GOOGLE_AVATAR_FOLDER = 'files';
+
+@Injectable()
+export class SocialAuthService {
+  private readonly logger = new Logger(SocialAuthService.name);
+  private readonly googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
+
+  constructor(
+    private readonly txHost: TransactionHost<TransactionalAdapterTypeOrm>,
+    private readonly storageService: StorageService,
+  ) {}
+
+  async verifyGoogleToken(idToken: string): Promise<{
+    email: string;
+    firstName: string;
+    lastName: string;
+    picture: string | null;
+  }> {
+    let ticket;
+    try {
+      ticket = await this.googleClient.verifyIdToken({
+        idToken,
+        audience: env.GOOGLE_CLIENT_ID,
+      });
+    } catch (err) {
+      this.logger.error(`[Google] Token verification failed: ${err?.message}`);
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    const payload = ticket.getPayload();
+    if (!payload?.email) {
+      throw new UnauthorizedException('Google token missing email');
+    }
+
+    return {
+      email: payload.email,
+      firstName: payload.given_name ?? '',
+      lastName: payload.family_name ?? '',
+      picture: payload.picture ?? null,
+    };
+  }
+
+  async verifyAppleToken(
+    identityToken: string,
+  ): Promise<{ appleUserId: string; email: string | null }> {
+    let payload;
+    try {
+      payload = await appleSignin.verifyIdToken(identityToken, {
+        audience: env.APPLE_CLIENT_ID,
+        ignoreExpiration: false,
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid Apple token');
+    }
+
+    return {
+      appleUserId: payload.sub,
+      email: (payload.email as string | undefined) ?? null,
+    };
+  }
+
+  async uploadAvatarFromUrl(pictureUrl: string): Promise<FileEntity | null> {
+    try {
+      const response = await axios.get<Buffer>(pictureUrl, {
+        responseType: 'arraybuffer',
+      });
+
+      const contentType = response.headers['content-type'] as string;
+      const mime = this.resolveImageMime(contentType);
+
+      if (!mime) return null;
+
+      const fileId = uuid();
+      const path = `/${GOOGLE_AVATAR_FOLDER}/${fileId}`;
+
+      await this.storageService.upload(path, response.data);
+
+      const fileRepo = this.txHost.tx.getRepository(FileEntity);
+      return fileRepo.save({
+        id: fileId,
+        path,
+        mime,
+        name: `avatar-${fileId}`,
+        status: FileStatus.UPLOADED,
+        uploadedAt: new Date(),
+      });
+    } catch (err) {
+      this.logger.warn(`[Google] Failed to upload avatar: ${err?.message}`);
+      return null;
+    }
+  }
+
+  private resolveImageMime(contentType: string): MimeType | null {
+    if (contentType.includes('image/jpeg') || contentType.includes('image/jpg')) {
+      return MimeType.ImageJpeg;
+    }
+    if (contentType.includes('image/png')) {
+      return MimeType.ImagePng;
+    }
+    return null;
+  }
+}

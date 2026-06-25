@@ -1,7 +1,6 @@
 #!/bin/bash
 
-#Tools
-brew install bat yazi postgresql fzf tree npm fd nvim tmux lazygit ripgrep commitizen
+#Tools brew install bat yazi postgresql fzf tree npm fd nvim tmux lazygit ripgrep commitizen
 
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
@@ -16,11 +15,13 @@ mkdir ~/.config/ghostty/
 mkdir ~/.config/yazi/
 mkdir ~/.config/karabiner/
 mkdir ~/.config/fish/
+mkdir ~/.claude/
 
 cp -r ./ghostty/* ~/.config/ghostty/
 cp -r ./yazi/* ~/.config/yazi/
 cp -r ./karabiner/* ~/.config/karabiner/
 cp -r ./fish/* ~/.config/fish/
+cp -r ./claude/* ~/.claude/
 
 cp .tmux.conf ~/
 
@@ -30,5 +31,7 @@ brew install --cask ghostty
 brew install --cask obsidian
 brew install --cask hot
 brew install --cask karabiner-elements
+brew install --cask dbeaver
+brew install --cask claude
 
 echo "Скрипт выполнен успешно!"

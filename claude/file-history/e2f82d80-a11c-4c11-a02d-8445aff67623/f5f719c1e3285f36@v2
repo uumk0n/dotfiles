@@ -1,0 +1,80 @@
+import {
+  Column,
+  DeleteDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+} from 'typeorm';
+
+import { BaseEntity } from '../utils';
+import { WalletEntity } from '@/db/entities/wallet.entity';
+import { TransactionEntity } from '@/db/entities/transaction.entity';
+
+/**
+ * Supported cryptocurrency networks.
+ */
+export enum CryptoNetwork {
+  Tron = 'TRON',
+  Ethereum = 'ETHEREUM',
+  Base = 'BASE',
+  Solana = 'SOLANA',
+  Polygon = 'POLYGON',
+}
+
+/**
+ * Saved cryptocurrency wallet address for deposits and withdrawals.
+ * Stores actual wallet addresses (not just references like Stripe).
+ * Addresses are validated before saving to prevent user errors.
+ */
+@Entity({
+  name: 'saved_crypto_address',
+})
+@Index('idx_saved_crypto_address_wallet_address', ['walletId', 'address'], {
+  unique: true,
+  where: 'deleted_at IS NULL',
+})
+export class SavedCryptoAddressEntity extends BaseEntity {
+  @ManyToOne(() => WalletEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'wallet_id', referencedColumnName: 'id' })
+  wallet: WalletEntity;
+
+  @Index('idx_saved_crypto_address_wallet')
+  @Column({ type: 'uuid', name: 'wallet_id' })
+  walletId: string;
+
+  @Column({
+    name: 'network',
+    type: 'enum',
+    enum: CryptoNetwork,
+  })
+  network: CryptoNetwork;
+
+  @Column({
+    name: 'address',
+    type: 'varchar',
+    length: 100,
+  })
+  address: string;
+
+  @Column({
+    name: 'label',
+    type: 'varchar',
+    length: 100,
+  })
+  label: string;
+
+  @Column({
+    name: 'is_default',
+    type: 'boolean',
+    default: false,
+  })
+  isDefault: boolean;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
+
+  @OneToMany(() => TransactionEntity, (entity) => entity.cryptoPaymentMethod)
+  transactions: TransactionEntity[];
+}

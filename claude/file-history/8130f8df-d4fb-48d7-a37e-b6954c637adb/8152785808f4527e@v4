@@ -1,0 +1,214 @@
+import { z } from 'zod';
+
+const zBoolean = () =>
+  z
+    .union([z.literal('true'), z.literal('false'), z.undefined()])
+    .transform((value) => {
+      if (value === undefined) {
+        return value;
+      }
+
+      if (value === 'true') {
+        return true;
+      }
+
+      return false;
+    });
+
+const zStrArray = () =>
+  z.union([
+    z.undefined().transform(() => [] as string[]),
+    z
+      .string()
+      .transform((origins) =>
+        origins.split(',').map((origin) => origin.trim()),
+      ),
+  ]);
+
+export const NODE_ENV_SCHEMA = z.object({
+  NODE_ENV: z.union([
+    z.undefined(),
+    z.literal('development'),
+    z.literal('production'),
+    z.literal('test'),
+  ]),
+});
+
+export const CORE_ENV_SCHEMA = z.object({
+  CORE_PUBLIC_URL: z.string(),
+  CORE_HOST: z.union([z.literal('localhost'), z.string()]),
+  CORE_PORT: z.number({ coerce: true }).positive().int(),
+  CORE_ORIGINS: zStrArray(),
+  CORE_THROTTLE_ENABLED: zBoolean(),
+  CORE_SUPER_ADMIN_EMAIL: z.string().email(),
+});
+
+export const JWT_ENV_SCHEMA = z.object({
+  JWT_SECRET: z.string(),
+});
+
+export const SWAGGER_ENV_SCHEMA = z.object({
+  SWAGGER_ENDPOINT: z.string(),
+});
+
+export const DB_ENV_SCHEMA = z.object({
+  DB_HOST: z.string(),
+  DB_PORT: z.number({ coerce: true }).positive().int(),
+  DB_NAME: z.string(),
+  DB_USER: z.string(),
+  DB_PASSWORD: z.string(),
+  DB_AUTO_SYNCHRONIZE: zBoolean(),
+  DB_AUTO_MIGRATIONS_RUN: zBoolean(),
+  DB_LOGGING: zBoolean(),
+  DB_SSL: zBoolean(),
+});
+
+export const AWS_ENV_SCHEMA = z.object({
+  AWS_REGION: z.string(),
+  AWS_ACCESS_KEY_ID: z.string(),
+  AWS_SECRET_ACCESS_KEY: z.string(),
+});
+
+export const AWS_S3_ENV_SCHEMA = z.object({
+  AWS_S3_BUCKET: z.string(),
+  AWS_S3_UPLOAD_FILE_SIZE_LIMIT: z.number({ coerce: true }).positive().int(),
+});
+
+export const MAIL_ENV_SCHEMA = z.object({
+  MAIL_SENDER_EMAIL: z.string().email(),
+  MAIL_REPLY_TO_EMAIL: z.string().email(),
+  MAIL_ENABLED: zBoolean(),
+});
+
+export const MAILERSEND_ENV_SCHEMA = z.object({
+  MAILERSEND_API_KEY: z.string(),
+});
+
+export const PHONE_NOTIFICATION_ENV_SCHEMA = z.object({
+  PHONE_NOTIFICATION_ENABLED: zBoolean(),
+});
+
+export const AWS_COGNITO_ENV_SCHEMA = z.object({
+  AWS_COGNITO_URL: z.string(),
+  AWS_COGNITO_USER_POOL_ID: z.string(),
+  AWS_COGNITO_CLIENT_ID: z.string(),
+  AWS_COGNITO_CLIENT_SECRET: z.string(),
+  AWS_COGNITO_SKIP: zBoolean().optional(),
+});
+
+export const INTERNAL_SECRET_ENV_SCHEMA = z.object({
+  INTERNAL_SECRET_CRON: z.string(),
+  INTERNAL_SECRET_AWS_SES: z.string(),
+});
+
+export const STRIPE_ENV_SCHEMA = z.object({
+  STRIPE_SECRET_KEY: z.string(),
+  STRIPE_PUBLISHABLE_KEY: z.string(),
+  STRIPE_WEBHOOK_SECRET: z.string(),
+  STRIPE_CONNECT_ENABLED: zBoolean(),
+  // Stripe card payment fees (passed to user on deposits)
+  STRIPE_CARD_FEE_PERCENT: z.coerce.number().min(0).max(100).default(2.9),
+  STRIPE_CARD_FEE_FIXED_CENTS: z.coerce.number().min(0).default(30), // $0.30 USD
+  STRIPE_CARD_FEE_FIXED_CENTS_AED: z.coerce.number().min(0).default(110), // ~AED 1.10
+});
+
+export const FEE_ENV_SCHEMA = z.object({
+  // Deposit configuration
+  MIN_DEPOSIT_AMOUNT_CENTS: z.coerce.number().min(1).default(1000), // $10 minimum
+});
+
+export const RABBITMQ_ENV_SCHEMA = z.object({
+  RABBITMQ_CONNECTION_URL: z.string(),
+});
+
+export const ENTRUPY_ENV_SCHEMA = z.object({
+  ENTRUPY_API_URL: z.string().url().default('https://api.entrupy.com/v2'),
+  ENTRUPY_API_TOKEN: z.string().optional(),
+  ENTRUPY_WEBHOOK_SECRET: z.string().optional(),
+  ENTRUPY_ENABLED: zBoolean().default('false'),
+  // Entrupy requirement thresholds
+  ENTRUPY_VALUE_THRESHOLD_CENTS: z.coerce.number().min(0).default(500000), // $5,000
+  ENTRUPY_MISMATCH_THRESHOLD_CENTS: z.coerce.number().min(0).default(50000), // $500
+  ENTRUPY_MISMATCH_THRESHOLD_PERCENT: z.coerce
+    .number()
+    .min(0)
+    .max(100)
+    .default(20), // 20%
+});
+export const PAYPAL_ENV_SCHEMA = z.object({
+  // REST API credentials
+  PAYPAL_CLIENT_ID: z.string(),
+  PAYPAL_CLIENT_SECRET: z.string(),
+
+  // sandbox | live
+  PAYPAL_MODE: z.union([z.literal('sandbox'), z.literal('live')]),
+
+  // Optional webhook configuration (required if webhooks are used)
+  PAYPAL_WEBHOOK_ID: z.string().optional(),
+});
+
+export const CRYPTO_PAY_ENV_SCHEMA = z.object({
+  // API credentials
+  CRYPTO_PAY_SECRET_KEY: z.string(),
+  CRYPTO_PAY_PUBLISHABLE_KEY: z.string().optional(),
+
+  // test | live
+  CRYPTO_PAY_MODE: z.union([z.literal('test'), z.literal('live')]),
+
+  // Optional webhook signature secret (required if webhooks are used)
+  CRYPTO_PAY_SIGNATURE_SECRET: z.string().optional(),
+});
+
+export const NOWPAYMENTS_ENV_SCHEMA = z.object({
+  // API Key
+  NOWPAYMENTS_API_KEY: z.string(),
+
+  // Payout authorization (email/password for /auth)
+  NOWPAYMENTS_AUTH_EMAIL: z.string(),
+  NOWPAYMENTS_AUTH_PASSWORD: z.string(),
+
+  NOWPAYMENTS_BASE_URL: z.string(),
+
+  NOWPAYMENTS_IPN_SECRET: z.string(),
+
+  NOWPAYMENTS_IPN_URL: z.string(),
+});
+
+export const SOCIAL_AUTH_ENV_SCHEMA = z.object({
+  GOOGLE_CLIENT_ID: z.string(),
+  APPLE_CLIENT_ID: z.string().optional(),
+  APPLE_TEAM_ID: z.string().optional(),
+});
+
+export const MERGED_ENV_SCHEMA = z.object({
+  ...NODE_ENV_SCHEMA.shape,
+  ...CORE_ENV_SCHEMA.shape,
+  ...SWAGGER_ENV_SCHEMA.shape,
+  ...MAIL_ENV_SCHEMA.shape,
+  ...AWS_ENV_SCHEMA.shape,
+  ...AWS_COGNITO_ENV_SCHEMA.shape,
+  ...AWS_S3_ENV_SCHEMA.shape,
+  ...MAILERSEND_ENV_SCHEMA.shape,
+  ...DB_ENV_SCHEMA.shape,
+  ...JWT_ENV_SCHEMA.shape,
+  ...INTERNAL_SECRET_ENV_SCHEMA.shape,
+  ...STRIPE_ENV_SCHEMA.shape,
+  ...FEE_ENV_SCHEMA.shape,
+  ...RABBITMQ_ENV_SCHEMA.shape,
+  ...PHONE_NOTIFICATION_ENV_SCHEMA.shape,
+  ...ENTRUPY_ENV_SCHEMA.shape,
+  ...PAYPAL_ENV_SCHEMA.shape,
+  ...CRYPTO_PAY_ENV_SCHEMA.shape,
+  ...NOWPAYMENTS_ENV_SCHEMA.shape,
+  ...SOCIAL_AUTH_ENV_SCHEMA.shape,
+});
+
+export const env = MERGED_ENV_SCHEMA.parse(process.env);
+
+export function isDevelopment() {
+  return env.NODE_ENV === 'development';
+}
+
+export const EMAIL_AUTH_ENABLED = ['development', 'staging'].includes(
+  process.env.NODE_ENV!,
+);

@@ -1,0 +1,451 @@
+"use client";
+
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/shared/ui/shadcn/accordion";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Separator } from "@/shared/ui/shadcn/separator";
+import {
+  LANDING_BRAND_LOGOS,
+  LANDING_FAQ,
+} from "@/widgets/landing-page/model/constants";
+import { motion, type Variants } from "framer-motion";
+import {
+  ArrowRight,
+  BanknoteIcon,
+  CircleCheckIcon,
+  EyeOffIcon,
+  ReceiptIcon,
+  ShieldCheckIcon,
+  SparklesIcon,
+  WatchIcon,
+} from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 48 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+const VP = { once: true, margin: "-80px" };
+
+const features = [
+  {
+    icon: <SparklesIcon className="h-10 w-10" strokeWidth={1.5} />,
+    title: "AI-Driven Expert Valuation",
+    description:
+      "We use both manual inspection and AI-driven tech, including devices like Entrupy, to verify material, craftsmanship, serials, and more; for an accurate final offer.",
+  },
+  {
+    icon: <ShieldCheckIcon className="h-10 w-10" strokeWidth={1.5} />,
+    title: "Insured custody & delivery",
+    description:
+      "We partner with Brink's to deliver fully insured pickup, plus insured high-security vaults managed to storage and protect your values.",
+  },
+  {
+    icon: <EyeOffIcon className="h-10 w-10" strokeWidth={1.5} />,
+    title: "Discreet and Private",
+    description: "Transactions are 100% confidential. No public offers.",
+  },
+];
+
+const staggerContainerSlow: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.15 } },
+};
+
+export function PermanentSalePage() {
+  const router = useRouter();
+
+  return (
+    <div className="new-design w-full bg-background">
+      <section className="mx-auto grid max-w-[1720px] grid-cols-1 md:min-h-[900px] md:grid-cols-2">
+        <div className="flex flex-col justify-between px-8 py-20 md:min-h-[900px] lg:px-24">
+          <div className="flex w-full flex-col">
+            <p className="mb-4 font-new-sans font-normal text-[12px] text-gray-500 uppercase tracking-[0.2em]">
+              Permanent Sale
+            </p>
+
+            <h1 className="mb-10 font-extralight font-new-serif text-[56px] leading-[1.1] tracking-[-0.02em]">
+              Convert luxury <br />
+              into liquidity.
+            </h1>
+
+            <div className="flex max-w-[480px] flex-col gap-6 font-new-sans text-base leading-[1.6]">
+              <p>
+                LuxFlow offers a discreet, structured route to a permanent
+                sale—designed for efficiency, privacy, and control. High-value
+                assets are assessed against current market conditions and
+                handled through a secure, governed process.
+              </p>
+              <p>
+                When you choose to sell outright, LuxFlow delivers
+                market-aligned pricing, verified authentication, and prompt
+                settlement—without delay or uncertainty.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-12 md:mt-0">
+            <Button
+              className="hover:/90 w-fit rounded-sm px-10 py-7"
+              onClick={() => router.push(APP_ROUTES.BUYBACK_REQUESTS.CREATE)}
+            >
+              Start with a Quote <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="relative flex items-center justify-center bg-[#EAE7E0]">
+          <Image
+            alt="Background pattern"
+            className="object-cover opacity-40"
+            fill
+            priority
+            src="/new-design-images/buyback-gallery/buyback-bg.avif"
+          />
+          <div className="absolute inset-0 bg-[#EDE9E3]/80" />
+          <div className="relative z-10 aspect-square w-[80%] max-w-[500px] p-4">
+            <div className="relative h-full w-full">
+              <Image
+                alt="Rolex Watch"
+                className="rounded-[4px] object-cover"
+                fill
+                priority
+                src="/new-design-images/permanent-sale-gallery/permanent-sale-hero.avif"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="w-full border-border border-y">
+        <div className="grid grid-cols-1 font-new-sans md:grid-cols-3">
+          <div className="flex flex-col gap-2 border-border border-b p-8 md:border-b-0 md:border-r">
+            <CircleCheckIcon
+              className="mb-2 h-6 w-6 text-primary"
+              strokeWidth={1.5}
+            />
+            <h3 className="font-medium font-new-sans text-base tracking-tight">
+              Permanent sale
+            </h3>
+            <p className="font-normal text-base leading-relaxed">
+              One clean settlement. No obligations, no repurchase conditions, no
+              further steps.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 border-border border-b p-8 md:border-b-0 md:border-r">
+            <CircleCheckIcon
+              className="mb-2 h-6 w-6 text-primary"
+              strokeWidth={1.5}
+            />
+            <h3 className="font-medium font-new-sans text-base tracking-tight">
+              Fast & Frictionless
+            </h3>
+            <p className="font-normal text-base leading-relaxed">
+              From AI-driven quote to insured authentication, settlement is
+              completed within 24–48 hours.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 p-8">
+            <CircleCheckIcon
+              className="mb-2 h-6 w-6 text-primary"
+              strokeWidth={1.5}
+            />
+            <h3 className="font-medium font-new-sans text-base tracking-tight">
+              Market-aligned valuation
+            </h3>
+            <p className="font-normal text-base leading-relaxed">
+              Each asset is assessed using data-driven analysis and expert
+              authentication to establish a clear, reasonable market value.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden py-16 md:py-24">
+        <div className="mx-auto max-w-[1720px] px-6 pb-6 min-[1172px]:px-16">
+          <motion.h2
+            className="text-center font-extralight font-new-serif text-2xl min-[1172px]:text-3xl"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={VP}
+            whileInView="visible"
+          >
+            Now Accepting Exclusive Brands
+          </motion.h2>
+          <motion.p
+            className="mt-2 text-center font-new-sans text-base min-[1172px]:text-xl"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={VP}
+            whileInView="visible"
+          >
+            Luxury watches, designer bags, Fine jewelry, art and more
+          </motion.p>
+        </div>
+
+        <div className="flex overflow-hidden">
+          <motion.div
+            animate={{ x: ["0%", "-50%"] }}
+            className="flex shrink-0 gap-2"
+            style={{ willChange: "transform" }}
+            transition={{
+              repeat: Number.POSITIVE_INFINITY,
+              duration: 30,
+              ease: "linear",
+            }}
+          >
+            {[...LANDING_BRAND_LOGOS, ...LANDING_BRAND_LOGOS].map(
+              (brand, idx) => (
+                <div
+                  className="flex shrink-0 items-center justify-center px-6"
+                  key={idx}
+                >
+                  <Image
+                    alt={brand.name}
+                    height={brand.h}
+                    src={brand.src}
+                    style={{ mixBlendMode: "multiply" }}
+                    width={brand.w}
+                  />
+                </div>
+              )
+            )}
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="relative flex min-h-[900px] w-full flex-col overflow-hidden bg-[#0A0A0B] text-[#F5F3EF] md:block 2xl:min-h-[1100px]">
+        <div className="relative h-[400px] w-full overflow-hidden md:absolute md:inset-0 md:z-0 md:h-full">
+          <video
+            autoPlay
+            className="h-full w-full object-cover opacity-80 md:opacity-60"
+            loop
+            muted
+            playsInline
+          >
+            <source
+              src="/new-design-images/permanent-sale-gallery/permanentsale-video-bg.mp4"
+              type="video/mp4"
+            />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0B] via-transparent to-transparent md:bg-gradient-to-r md:from-[#0A0A0B] md:via-[#0A0A0B]/40 md:to-transparent" />
+        </div>
+
+        <div className="-left-[10%] -top-[10%] pointer-events-none absolute z-1 hidden h-[600px] w-[600px] rounded-full opacity-20 blur-[120px] md:block" />
+
+        <div className="relative z-10 mx-auto max-w-[1720px]">
+          <div className="grid grid-cols-1 md:grid-cols-2">
+            <div className="flex flex-col justify-evenly px-8 py-12 md:min-h-[900px] md:py-24 lg:px-32 2xl:min-h-[1100px] 2xl:py-48">
+              <h2 className="font-extralight font-new-serif text-[36px] leading-tight md:mb-0 md:text-[42px]">
+                How it <span className="italic">works</span>
+              </h2>
+
+              <div className="my-10 flex flex-col gap-7 md:my-0">
+                {[
+                  {
+                    icon: <WatchIcon />,
+                    title: "1. Request a quote",
+                    text: "Share key details and images of your asset to initiate the review.",
+                  },
+                  {
+                    icon: <ReceiptIcon />,
+                    title: "2. Receive an offer",
+                    text: "Our analytics and specialists assess your asset and provide a clear valuation offer.",
+                  },
+                  {
+                    icon: <BanknoteIcon />,
+                    title: "3. Get your cash",
+                    text: "Send your asset via insured transport with Brink’s or deliver it to an approved location for physical inspection. Once completed, funds are transferred promptly to your selected account or wallet.",
+                  },
+                ].map((step, idx) => (
+                  <div className="flex gap-7 font-new-sans" key={idx}>
+                    <div className="mt-1 h-6 w-6 shrink-0 text-gray-400">
+                      {step.icon}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <h3 className="font-medium text-[20px]">{step.title}</h3>
+                      <p className="max-w-[400px] text-base leading-relaxed">
+                        {step.text}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                className="w-fit px-8 py-6"
+                onClick={() => router.push(APP_ROUTES.BUYBACK_REQUESTS.CREATE)}
+              >
+                Start with a Quote <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="hidden md:block md:border-[#F5F3EF]/90 md:border-l" />
+          </div>
+        </div>
+      </section>
+
+      <section className="relative w-full overflow-hidden px-4 py-32">
+        <Image
+          alt="Background"
+          className="object-cover"
+          fill
+          priority
+          src="/new-design-images/create-buyback-bg.webp"
+        />
+
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-[1] min-h-screen bg-gradient-to-b from-[#F5F3EF] via-[#F5F3EF]/80 to-transparent"
+          style={{ mixBlendMode: "multiply" }}
+        />
+
+        <div className="relative z-10 mx-auto max-w-[1720px]">
+          <div className="relative z-10 mx-auto max-w-[1720px] px-6">
+            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-3">
+              <div className="mx-auto flex w-full max-w-[415px] flex-col gap-8">
+                <div className="relative aspect-[415/513.5] w-full overflow-hidden rounded-[4px] shadow-sm">
+                  <Image
+                    alt="Luxury asset 1"
+                    className="object-cover"
+                    fill
+                    src="/new-design-images/buyback-gallery/buyback-1.avif"
+                  />
+                </div>
+                <div className="relative aspect-[415/513.5] w-full overflow-hidden rounded-[4px] shadow-sm">
+                  <Image
+                    alt="Luxury asset 2"
+                    className="object-cover"
+                    fill
+                    src="/new-design-images/buyback-gallery/buyback-2.avif"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center px-4 text-center">
+                <h2 className="mb-16 font-extralight font-new-serif text-[56px] leading-[1.1]">
+                  Your Luxury, <br /> Managed <br /> with Precision
+                </h2>
+
+                <div className="flex max-w-[420px] flex-col gap-12">
+                  {features.map((item, idx) => (
+                    <div className="flex flex-col items-center gap-3" key={idx}>
+                      <div className="mb-2">{item.icon}</div>
+                      <h3 className="font-extralight font-new-serif text-3xl">
+                        {item.title}
+                      </h3>
+                      <p className="max-w-[353px] font-new-sans font-normal text-[16px] leading-relaxed">
+                        {item.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mx-auto flex w-full max-w-[415px] flex-col gap-8">
+                <div className="relative aspect-[415/513.5] w-full overflow-hidden rounded-[4px] shadow-sm">
+                  <Image
+                    alt="Luxury asset 3"
+                    className="object-cover"
+                    fill
+                    src="/new-design-images/buyback-gallery/buyback-3.avif"
+                  />
+                </div>
+                <div className="relative aspect-[415/418.5] w-full overflow-hidden rounded-[4px] shadow-sm">
+                  <Image
+                    alt="Luxury asset 4"
+                    className="object-cover"
+                    fill
+                    src="/new-design-images/buyback-gallery/buyback-4.avif"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <Separator className="mt-16" />
+
+          <div className="mt-48 flex flex-col items-center text-center">
+            <div className="max-w-[700px]">
+              <p className="mb-4 font-new-sans font-normal text-primary text-xs uppercase tracking-[0.2em] md:mb-8">
+                OUR PROMISE
+              </p>
+
+              <h2 className="mb-12 font-extralight font-new-serif text-lg text-primary leading-[1.3] md:text-[48px]">
+                We provide discreet, efficient access to liquidity from your
+                luxury assets. A smooth, technology-led process delivers
+                market-aligned valuations, verified authenticity, and prompt
+                settlement—without noise or delay.
+              </h2>
+
+              <p className="mb-12 font-extralight font-new-serif text-lg text-primary leading-[1.3] md:text-[48px]">
+                Discreet liquidity, delivered with precision.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section className="bg-[#F5F3EF] px-6 pb-24">
+        <div className="mx-auto max-w-[1720px] border-[#D6D3D1] border-t pt-16">
+          <div className="grid w-full grid-cols-1 gap-12 min-[1172px]:grid-cols-2 min-[1172px]:gap-20 min-[1172px]:px-16">
+            <motion.div
+              className="w-full"
+              initial="hidden"
+              variants={fadeUp}
+              viewport={VP}
+              whileInView="visible"
+            >
+              <h2
+                className="font-extralight font-new-serif text-4xl text-[#44403C] leading-[1.1] tracking-[0] min-[1172px]:text-[56px]"
+                style={{ fontFeatureSettings: "'liga' off" }}
+              >
+                Frequently Asked
+                <br />
+                Questions
+              </h2>
+            </motion.div>
+
+            <motion.div
+              className="w-full"
+              initial="hidden"
+              variants={staggerContainerSlow}
+              viewport={VP}
+              whileInView="visible"
+            >
+              <Accordion className="w-full" collapsible type="single">
+                {LANDING_FAQ.map((item, index) => (
+                  <motion.div key={`faq-${index}`} variants={fadeUp}>
+                    <AccordionItem
+                      className="border-[#D6D3D1] first:border-t-0"
+                      value={`faq-${index}`}
+                    >
+                      <AccordionTrigger className="py-6 text-left [&>span]:font-medium [&>span]:font-new-sans [&>span]:text-[#44403C] [&>span]:text-[18px]">
+                        {item.question}
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <p className="pb-4 font-new-sans text-[#A8A29E] text-sm leading-relaxed">
+                          {item.answer}
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </motion.div>
+                ))}
+              </Accordion>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,34 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class DefaultCurrencyAed1775563283158 implements MigrationInterface {
+  name = 'DefaultCurrencyAed1775563283158';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      UPDATE "user"
+      SET settings = settings || '{"CURRENCY": "AED"}'::jsonb
+      WHERE settings->>'CURRENCY' = 'USD'
+         OR NOT (settings ? 'CURRENCY')
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE "user"
+        ALTER COLUMN settings
+        SET DEFAULT '{"NOTIFICATIONS":{"general":true,"buyback":true,"authenticator":true,"accountSecurity":true},"CURRENCY":"AED"}'
+    `);
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      UPDATE "user"
+      SET settings = settings || '{"CURRENCY": "USD"}'::jsonb
+      WHERE settings->>'CURRENCY' = 'AED'
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE "user"
+        ALTER COLUMN settings
+        SET DEFAULT '{"NOTIFICATIONS":{"general":true,"buyback":true,"authenticator":true,"accountSecurity":true},"CURRENCY":"USD"}'
+    `);
+  }
+}

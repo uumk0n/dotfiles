@@ -1,0 +1,234 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { CheckCircle } from "lucide-react";
+import Image from "next/image";
+
+import { QuestionsEnquiriesSection } from "@/shared/ui/questions-enquiries-section";
+import { TestimonialHighlightSection } from "@/shared/ui/testimonial-highlight-section";
+
+const MARQUEE_LEFT = [
+  { src: "/new-design-images/about-gallery/gold-bars-2.jpg", alt: "Gold bars" },
+  { src: "/new-design-images/about-gallery/daytona.jpg", alt: "Rolex Daytona" },
+  { src: "/new-design-images/about-gallery/item-3.jpg", alt: "Luxury item" },
+  { src: "/new-design-images/about-gallery/patek-philippe.jpg", alt: "Patek Philippe" },
+  { src: "/new-design-images/about-gallery/item-6.jpg", alt: "Luxury item" },
+];
+
+const MARQUEE_RIGHT = [
+  { src: "/new-design-images/about-gallery/birkin-bag.jpg", alt: "Birkin bag" },
+  { src: "/new-design-images/about-gallery/getty-watch.jpg", alt: "Luxury watch" },
+  { src: "/new-design-images/about-gallery/item-5.jpg", alt: "Luxury item" },
+  { src: "/new-design-images/about-gallery/bracelet.jpg", alt: "Bracelet" },
+  { src: "/new-design-images/about-gallery/item-7.jpg", alt: "Luxury item" },
+];
+
+const VALUE_PROPS = [
+  {
+    title: "Instant Liquidity",
+    description: "Access up to AED 1,000,000+ within 24 hours.",
+  },
+  {
+    title: "No Personal Guarantee",
+    description: "Item-backed financing only, no credit checks.",
+  },
+  {
+    title: "Expert + AI Appraisals",
+    description: "Advanced technology and human expertise combined.",
+  },
+  {
+    title: "Secure & Confidential",
+    description: "Encrypted platform and insured storage.",
+  },
+  {
+    title: "Regionally Rooted, Globally Aligned",
+    description: "Built in the GCC, ready for global expansion.",
+  },
+];
+
+export function AboutPage() {
+  return (
+    <div className="flex flex-col bg-[#f5f3ef]">
+      {/* Hero */}
+      <section className="flex flex-col items-center gap-10 px-6 py-[80px] lg:py-[120px]">
+        <div className="h-[260px] w-[220px] overflow-hidden rounded-[4px] sm:h-[320px] sm:w-[280px] lg:h-[418px] lg:w-[390px]">
+          <Image
+            src="/new-design-images/about-gallery/about-bg.png"
+            alt="LuxFlow luxury assets"
+            width={390}
+            height={418}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <div className="flex flex-col items-center gap-4 text-center text-[#44403c]">
+          <h1 className="font-extralight font-new-serif text-[48px] leading-[1.1] sm:text-[56px] lg:text-[64px]">
+            Luxury, made fluid.
+          </h1>
+          <p className="max-w-[594px] font-new-sans text-base leading-[1.5] tracking-[-0.16px]">
+            LuxFlow provides a discreet, structured path to liquidity, supported
+            by expert review, secure infrastructure, and disciplined execution.
+          </p>
+        </div>
+      </section>
+
+      {/* Value props strip */}
+      <div className="border-[#d6d3d1] border-t border-b">
+        <div className="flex flex-col divide-y divide-[#d6d3d1] lg:flex-row lg:divide-x lg:divide-y-0">
+          {VALUE_PROPS.map((item) => (
+            <div
+              key={item.title}
+              className="flex flex-1 flex-col gap-3 px-6 py-5 lg:px-8 lg:py-5"
+            >
+              <div className="flex items-center gap-3">
+                <CheckCircle
+                  size={20}
+                  className="shrink-0 text-[#44403c]"
+                  strokeWidth={1.5}
+                />
+                <p className="font-bold font-new-sans text-[#44403c] text-[15px] leading-[1.5]">
+                  {item.title}
+                </p>
+              </div>
+              <p className="font-new-sans text-[#44403c] text-[15px] leading-[1.5]">
+                {item.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Trusted platform + image */}
+      <section className="flex flex-col items-stretch border-[#d6d3d1] border-b lg:min-h-[840px] lg:flex-row">
+        <div className="flex flex-1 flex-col justify-center gap-8 px-8 py-16 lg:px-[100px] lg:py-[80px]">
+          <h2 className="font-extralight font-new-serif text-[#44403c] text-[44px] leading-[1.1] sm:text-[72px] lg:text-[116px]">
+            Your <span className="text-[#001a8c]">trusted platform</span> for
+            premium buy back and exclusive auctions
+          </h2>
+          <p className="max-w-[500px] font-new-sans text-[#44403c] text-base leading-[1.5] tracking-[-0.16px]">
+            Headquartered in Dubai, LuxFlow serves clients across the GCC and
+            beyond, providing secure, technology-driven liquidity solutions
+            tailored to the luxury economy.
+          </p>
+        </div>
+        <div className="relative min-h-[320px] w-full lg:min-h-0 lg:w-[400px] xl:w-[500px]">
+          <Image
+            src="/new-design-images/about-gallery/about-bag.png"
+            alt="Luxury items"
+            fill
+            className="object-cover"
+          />
+        </div>
+      </section>
+
+      {/* Image gallery + Mission & Vision — 50/50 split */}
+      <section className="flex flex-col border-[#d6d3d1] border-b lg:h-[800px] lg:flex-row">
+        {/* Left 50%: two vertical marquee sub-columns */}
+        <div className="flex h-[500px] w-full overflow-hidden lg:h-full lg:w-1/2">
+          {/* Left sub-column: 60% — marquee moving DOWN */}
+          <div className="h-full w-[60%] overflow-hidden">
+            <motion.div
+              animate={{ y: ["-50%", "0%"] }}
+              className="flex flex-col gap-4"
+              style={{ willChange: "transform" }}
+              transition={{ duration: 25, ease: "linear", repeat: Number.POSITIVE_INFINITY }}
+            >
+              {[...MARQUEE_LEFT, ...MARQUEE_LEFT].map((image, idx) => (
+                <div
+                  className="relative w-full shrink-0 overflow-hidden"
+                  key={idx}
+                  style={{ aspectRatio: "3/4" }}
+                >
+                  <Image
+                    alt={image.alt}
+                    className="object-cover"
+                    fill
+                    sizes="30vw"
+                    src={image.src}
+                  />
+                </div>
+              ))}
+            </motion.div>
+          </div>
+
+          {/* Right sub-column: 40% — marquee moving UP */}
+          <div className="h-full w-[40%] overflow-hidden">
+            <motion.div
+              animate={{ y: ["0%", "-50%"] }}
+              className="flex flex-col gap-4"
+              style={{ willChange: "transform" }}
+              transition={{ duration: 25, ease: "linear", repeat: Number.POSITIVE_INFINITY }}
+            >
+              {[...MARQUEE_RIGHT, ...MARQUEE_RIGHT].map((image, idx) => (
+                <div
+                  className="relative w-full shrink-0 overflow-hidden"
+                  key={idx}
+                  style={{ aspectRatio: "3/4" }}
+                >
+                  <Image
+                    alt={image.alt}
+                    className="object-cover"
+                    fill
+                    sizes="20vw"
+                    src={image.src}
+                  />
+                </div>
+              ))}
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Right 50%: Mission & Vision text */}
+        <div className="flex w-full items-center justify-center px-8 py-16 lg:h-full lg:w-1/2 lg:px-[80px] lg:py-0">
+          <div className="flex w-full max-w-[500px] flex-col gap-[60px] text-[#44403c]">
+            <div className="flex flex-col gap-5">
+              <h2 className="font-extralight font-new-serif text-[36px] leading-[1.2]">
+                Our Mission
+              </h2>
+              <p className="font-new-sans text-base leading-[1.5] tracking-[-0.16px]">
+                To empower individuals, collectors, and businesses to unlock
+                real value from their luxury items through secure, AI-powered
+                appraisals, transparent processes, and confidential financial
+                solutions.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-5">
+              <h2 className="font-extralight font-new-serif text-[36px] leading-[1.2]">
+                Our Vision
+              </h2>
+              <p className="font-new-sans text-base leading-[1.5] tracking-[-0.16px]">
+                To become the GCC&apos;s most trusted fintech for luxury-backed
+                liquidity, where items don&apos;t sit idle, but are transformed
+                into opportunities, capital, and growth with integrity and
+                innovation.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Our Promise */}
+      <section className="flex flex-col items-center justify-center border-[#d6d3d1] border-b px-8 py-[100px]">
+        <div className="flex max-w-[500px] flex-col gap-5 text-center text-[#44403c]">
+          <p className="font-new-sans text-sm uppercase tracking-wider">
+            Our Promise
+          </p>
+          <p className="font-extralight font-new-serif text-[36px] leading-[1.2]">
+            We turn the value of your luxury items into capital with accuracy,
+            integrity, and ease. You receive market-aligned valuations, verified
+            authenticity, and your payout the moment you need it.
+            <br />
+            <br />
+            No delays. No doubt. Complete transparency.
+          </p>
+        </div>
+      </section>
+
+      {/* Testimonial */}
+      <TestimonialHighlightSection />
+
+      {/* Questions or enquiries */}
+      <QuestionsEnquiriesSection />
+    </div>
+  );
+}

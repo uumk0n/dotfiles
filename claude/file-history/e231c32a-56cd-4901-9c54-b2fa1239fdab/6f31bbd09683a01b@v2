@@ -1,0 +1,560 @@
+"use client";
+
+import { useTickets } from "@/shared/api/query-hooks/use-tickets";
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { QuestionsEnquiriesSection } from "@/shared/ui/questions-enquiries-section";
+import {
+  ACTIVE_TICKET_STATUSES,
+  ARCHIVE_TICKET_STATUSES,
+  TICKET_CATEGORY_LABELS,
+  TICKET_STATUS_LABELS,
+} from "@/shared/constants/ticket";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
+import type { TicketListItem } from "@/shared/types/ticket.types";
+import { TicketStatus } from "@/shared/types/ticket.types";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { type ReactNode, Suspense, useState } from "react";
+
+
+const STATUS_TEXT_COLORS: Record<TicketStatus, string> = {
+  [TicketStatus.Open]: "text-[#059669]",
+  [TicketStatus.Resolved]: "text-[#059669]",
+  [TicketStatus.Rejected]: "text-[#DC2626]",
+  [TicketStatus.Cancelled]: "text-[#6B7280]",
+};
+
+const STATUS_BADGE_CLASSES: Record<
+  TicketStatus,
+  { bg: string; text: string }
+> = {
+  [TicketStatus.Open]: { bg: "bg-[#ecfdf5]", text: "text-[#047857]" },
+  [TicketStatus.Resolved]: { bg: "bg-[#ecfdf5]", text: "text-[#047857]" },
+  [TicketStatus.Rejected]: { bg: "bg-[#fee2e2]", text: "text-[#b91c1c]" },
+  [TicketStatus.Cancelled]: { bg: "bg-[#f3f4f6]", text: "text-[#6b7280]" },
+};
+
+type FilterValue = "all" | "active" | "archive";
+
+function SupportPageContent() {
+  const { status } = useSession();
+  const isAuthenticated = status === "authenticated";
+  const isSessionLoading = status === "loading";
+
+  const router = useRouter();
+  const [filter, setFilter] = useState<FilterValue>("all");
+
+  function getStatuses() {
+    if (filter === "active") return ACTIVE_TICKET_STATUSES;
+    if (filter === "archive") return ARCHIVE_TICKET_STATUSES;
+    return;
+  }
+  const statuses = getStatuses();
+
+  const { data, isLoading } = useTickets({ statuses }, isAuthenticated);
+
+  const tickets = data?.data ?? [];
+  const ticketCount = data?.total ?? 0;
+
+  return (
+    <div className="mb-10 flex flex-col">
+      {/* Page header */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <h1 className="font-extralight font-new-serif text-4xl text-[#44403C] leading-[120%]">
+          Support
+        </h1>
+        <Link
+          href={APP_ROUTES.TICKETS.CREATE}
+          className="inline-flex h-10 w-fit items-center gap-2 rounded border border-[#44403C] bg-transparent px-4 font-new-sans text-[#44403C] text-sm transition-colors hover:bg-[#EDE9E3]"
+        >
+          Raise Ticket
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M7 1v12M1 7h12"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </Link>
+      </div>
+
+      {/* Count + filter */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-0.5">
+          <p className="font-medium font-new-sans text-[#44403C]">
+            {isAuthenticated ? ticketCount : 0} Support Requests
+          </p>
+          <p className="font-new-sans text-[#A8A29E] text-sm">
+            This is a record of all your Support Requests
+          </p>
+        </div>
+        <Select
+          value={filter}
+          onValueChange={(val) => setFilter(val as FilterValue)}
+          disabled={!isAuthenticated}
+        >
+          <SelectTrigger className="h-10 w-full rounded border border-[#D6D3D1] bg-[#F5F3EF] font-new-sans text-[#44403C] text-sm sm:w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Tickets</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="archive">Archive</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Ticket list area */}
+      <div className="mb-16 min-h-[320px] overflow-hidden rounded-xl border border-[#D6D3D1] bg-[#F5F3EF]">
+        <TicketListContent
+          isLoading={isSessionLoading || (isAuthenticated && isLoading)}
+          isAuthenticated={isAuthenticated}
+          tickets={tickets}
+          onTicketClick={(id) => router.push(`/support/${id}`)}
+        />
+      </div>
+
+      {/* Questions or enquiries — full bleed */}
+      <div className="-mb-4 min-[1172px]:-mb-8 mr-[calc(-50vw+50%)] ml-[calc(-50vw+50%)]">
+        <QuestionsEnquiriesSection />
+      </div>
+    </div>
+  );
+}
+
+function TicketTableRow({
+  ticket,
+  onClick,
+}: {
+  ticket: TicketListItem;
+  onClick: () => void;
+}) {
+  const ticketId = `Ticket${ticket.id.replace(/-/g, "").slice(0, 5).toUpperCase()}`;
+  const date = new Date(ticket.createdAt).toLocaleDateString("en-AE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+  return (
+    <tr
+      className="cursor-pointer border-[#E7E5E4] border-t transition-colors hover:bg-[#EDE9E3]"
+      onClick={onClick}
+    >
+      <td className="py-4 pr-3 pl-6 font-new-sans text-[#44403C] text-sm">
+        {ticketId}
+      </td>
+      <td className="px-3 py-4 font-new-sans text-[#44403C] text-sm">{date}</td>
+      <td className="px-3 py-4 font-new-sans text-[#44403C] text-sm">
+        {TICKET_CATEGORY_LABELS[ticket.category]}
+      </td>
+      <td className="px-3 py-4 font-new-sans text-[#44403C] text-sm">
+        {ticket.referenceId ?? "N/A"}
+      </td>
+      <td className="max-w-[320px] px-3 py-4">
+        <span className="flex items-center gap-1.5 font-new-sans text-[#44403C] text-sm">
+          <PaperclipIcon />
+          <span className="truncate">{ticket.subject}</span>
+        </span>
+      </td>
+      <td className="px-3 py-4">
+        <span
+          className={`font-medium font-new-sans text-sm ${STATUS_TEXT_COLORS[ticket.status]}`}
+        >
+          {TICKET_STATUS_LABELS[ticket.status]}
+        </span>
+      </td>
+      <td className="py-4 pr-4 pl-3">
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex size-8 items-center justify-center rounded-full border border-[#D6D3D1] transition-colors hover:border-[#44403C]"
+          aria-label="View ticket"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 7h8M7.5 3.5L11 7l-3.5 3.5"
+              stroke="#44403C"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function PaperclipIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="shrink-0 text-[#A8A29E]"
+    >
+      <path
+        d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function MobileTicketCard({
+  ticket,
+  onClick,
+}: {
+  ticket: TicketListItem;
+  onClick: () => void;
+}) {
+  const ticketId = `Ticket${ticket.id.replace(/-/g, "").slice(0, 5).toUpperCase()}`;
+  const badge = STATUS_BADGE_CLASSES[ticket.status];
+  const statusLabel = TICKET_STATUS_LABELS[ticket.status];
+
+  return (
+    <div
+      className="flex cursor-pointer flex-col gap-2 border-[#D6D3D1] border-b p-2 last:border-b-0"
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={`inline-flex shrink-0 items-center rounded-lg px-2 py-0.5 font-medium font-new-sans text-xs ${badge.bg} ${badge.text}`}
+        >
+          {statusLabel}
+        </span>
+        <span className="flex-1 font-new-sans text-[#44403C] text-sm">
+          {ticketId}
+        </span>
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex shrink-0 items-center justify-center rounded-lg border border-[#A8A29E] p-1.5"
+          aria-label="View ticket"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 7h8M7.5 3.5L11 7l-3.5 3.5"
+              stroke="#44403C"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <div className="flex items-center gap-2 py-1">
+        <PaperclipIcon />
+        <span className="flex-1 truncate font-new-sans text-[#44403C] text-sm">
+          {ticket.subject}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MobileTicketList({
+  tickets,
+  onTicketClick,
+}: {
+  tickets: TicketListItem[];
+  onTicketClick: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-col">
+      <div
+        className="flex items-center gap-2 border-[#D6D3D1] border-b p-2"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.6) 100%), linear-gradient(90deg, #ede9e3 0%, #ede9e3 100%)",
+        }}
+      >
+        <span className="font-medium font-new-sans text-[#A8A29E] text-sm">
+          My Tickets
+        </span>
+      </div>
+      {tickets.map((ticket) => (
+        <MobileTicketCard
+          key={ticket.id}
+          ticket={ticket}
+          onClick={() => onTicketClick(ticket.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+type SortKey = "date" | "category" | "related" | "subject" | "status";
+type SortDir = "asc" | "desc";
+
+interface ColumnDef {
+  label: string;
+  sortKey?: SortKey;
+}
+
+const COLUMNS: ColumnDef[] = [
+  { label: "Ticket ID" },
+  { label: "Date", sortKey: "date" },
+  { label: "Issue Category", sortKey: "category" },
+  { label: "Related", sortKey: "related" },
+  { label: "Description", sortKey: "subject" },
+  { label: "Status", sortKey: "status" },
+  { label: "Actions" },
+];
+
+function sortTickets(
+  tickets: TicketListItem[],
+  key: SortKey,
+  dir: SortDir,
+): TicketListItem[] {
+  return [...tickets].sort((aa, bb) => {
+    let cmp = 0;
+    if (key === "date") {
+      cmp = new Date(aa.createdAt).getTime() - new Date(bb.createdAt).getTime();
+    } else if (key === "category") {
+      cmp = aa.category.localeCompare(bb.category);
+    } else if (key === "related") {
+      cmp = (aa.referenceId ?? "").localeCompare(bb.referenceId ?? "");
+    } else if (key === "subject") {
+      cmp = aa.subject.localeCompare(bb.subject);
+    } else if (key === "status") {
+      cmp = aa.status.localeCompare(bb.status);
+    }
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path
+        d="M6 1v10M3 4l3-3 3 3"
+        stroke={active && dir === "asc" ? "#44403C" : "#D6D3D1"}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 8l3 3 3-3"
+        stroke={active && dir === "desc" ? "#44403C" : "#D6D3D1"}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function TicketListContent({
+  isLoading,
+  isAuthenticated,
+  tickets,
+  onTicketClick,
+}: {
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  tickets: TicketListItem[];
+  onTicketClick: (id: string) => void;
+}) {
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  if (isLoading) return <TicketSkeleton />;
+  if (!isAuthenticated) return <GuestEmptyState />;
+  if (tickets.length === 0) return <AuthEmptyState />;
+
+  const sorted = sortTickets(tickets, sortKey, sortDir);
+
+  return (
+    <>
+      <div className="sm:hidden">
+        <MobileTicketList tickets={sorted} onTicketClick={onTicketClick} />
+      </div>
+      <div className="hidden w-full overflow-x-auto sm:block">
+        <table className="w-full min-w-[700px]">
+          <thead>
+            <tr className="border-[#E7E5E4] border-b">
+              {COLUMNS.map((col) => (
+                <th
+                  key={col.label}
+                  className="py-3 pr-3 pl-6 text-left first:pl-6 last:pr-4"
+                >
+                  {col.sortKey ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.sortKey as SortKey)}
+                      className="flex items-center gap-1 font-medium font-new-sans text-[#A8A29E] text-xs transition-colors hover:text-[#44403C]"
+                    >
+                      {col.label}
+                      <SortIcon
+                        active={sortKey === col.sortKey}
+                        dir={sortDir}
+                      />
+                    </button>
+                  ) : (
+                    <span className="font-medium font-new-sans text-[#A8A29E] text-xs">
+                      {col.label}
+                    </span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((ticket) => (
+              <TicketTableRow
+                key={ticket.id}
+                ticket={ticket}
+                onClick={() => onTicketClick(ticket.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function TicketSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 p-6">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="h-16 animate-pulse rounded-xl bg-[#EDE9E3]" />
+      ))}
+    </div>
+  );
+}
+
+function EmptyStateWrapper({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"
+          stroke="#A8A29E"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"
+          stroke="#A8A29E"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {children}
+    </div>
+  );
+}
+
+function GuestEmptyState() {
+  return (
+    <EmptyStateWrapper>
+      <div className="flex flex-col gap-1">
+        <p className="font-medium font-new-sans text-[#A8A29E]">
+          Nothing to see here yet
+        </p>
+        <p className="font-new-sans text-[#A8A29E] text-sm">
+          Login to see your created support tickets
+        </p>
+      </div>
+    </EmptyStateWrapper>
+  );
+}
+
+function AuthEmptyState() {
+  return (
+    <EmptyStateWrapper>
+      <div className="flex flex-col gap-1">
+        <p className="font-medium font-new-sans text-[#A8A29E]">
+          Nothing to see here yet
+        </p>
+        <p className="font-new-sans text-[#A8A29E] text-sm">
+          You haven't created any support tickets.
+        </p>
+      </div>
+      <Link
+        href={APP_ROUTES.TICKETS.CREATE}
+        className="mt-2 inline-flex h-10 items-center justify-center rounded-lg border border-[#A8A29E] bg-[#F5F3EF] px-5 font-new-sans text-[#44403C] text-sm transition-colors hover:bg-[#EDE9E3]"
+      >
+        Raise your first ticket
+      </Link>
+    </EmptyStateWrapper>
+  );
+}
+
+
+export default function SupportPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col gap-3 pt-4">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-xl bg-[#EDE9E3]"
+            />
+          ))}
+        </div>
+      }
+    >
+      <SupportPageContent />
+    </Suspense>
+  );
+}

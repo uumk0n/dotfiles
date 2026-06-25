@@ -1,0 +1,211 @@
+"use client";
+
+import { useTickets } from "@/shared/api/query-hooks/use-tickets";
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import {
+  ACTIVE_TICKET_STATUSES,
+  ARCHIVE_TICKET_STATUSES,
+  TICKET_STATUS_LABELS,
+} from "@/shared/constants/ticket";
+import { TicketStatus } from "@/shared/types/ticket.types";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+
+const STATUS_COLORS: Record<TicketStatus, string> = {
+  [TicketStatus.Open]: "bg-[#D1FAE5] text-[#065F46]",
+  [TicketStatus.Resolved]: "bg-[#DBEAFE] text-[#1E40AF]",
+  [TicketStatus.Rejected]: "bg-[#FEE2E2] text-[#991B1B]",
+  [TicketStatus.Cancelled]: "bg-[#F3F4F6] text-[#6B7280]",
+};
+
+function TicketsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab = searchParams.get("tab") || "active";
+
+  const { data: activeTicketsData, isLoading: isLoadingActive } = useTickets(
+    { statuses: ACTIVE_TICKET_STATUSES },
+    tab === "active",
+  );
+
+  const { data: archiveTicketsData, isLoading: isLoadingArchive } = useTickets(
+    { statuses: ARCHIVE_TICKET_STATUSES },
+    tab === "archive",
+  );
+
+  const tickets =
+    tab === "active"
+      ? activeTicketsData?.data || []
+      : archiveTicketsData?.data || [];
+  const isLoading = tab === "active" ? isLoadingActive : isLoadingArchive;
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-light font-new-serif text-3xl text-[#44403C] leading-[120%]">
+            Support Tickets
+          </h1>
+          <p className="font-new-sans text-[#A8A29E] text-sm">
+            View and manage your support requests
+          </p>
+        </div>
+        <Link
+          href={APP_ROUTES.TICKETS.CREATE}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#021171] px-6 font-medium font-new-sans text-[#F5F3EF] text-base transition-opacity hover:opacity-90"
+        >
+          Raise a Ticket
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 8h10M9 4l4 4-4 4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+      </div>
+
+      <div className="flex gap-1 border-[#D6D3D1] border-b">
+        <button
+          type="button"
+          onClick={() => router.push(APP_ROUTES.TICKETS.ACTIVE)}
+          className={`px-4 pb-3 font-new-sans text-sm transition-colors ${
+            tab === "active"
+              ? "border-[#021171] border-b-2 font-medium text-[#021171]"
+              : "text-[#A8A29E] hover:text-[#44403C]"
+          }`}
+        >
+          Active
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push(APP_ROUTES.TICKETS.ARCHIVE)}
+          className={`px-4 pb-3 font-new-sans text-sm transition-colors ${
+            tab === "archive"
+              ? "border-[#021171] border-b-2 font-medium text-[#021171]"
+              : "text-[#A8A29E] hover:text-[#44403C]"
+          }`}
+        >
+          Archive
+        </button>
+      </div>
+
+      {isLoading && (
+        <div className="flex flex-col gap-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-xl bg-[#EDE9E3]"
+            />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && tickets.length === 0 && (
+        <div className="flex flex-col items-center gap-4 py-16">
+          <div className="flex size-16 items-center justify-center rounded-full bg-[#EDE9E3]">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M7 8h10M7 12h6M9 18H7a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v4"
+                stroke="#A8A29E"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <circle cx="17" cy="17" r="4" stroke="#A8A29E" strokeWidth="1.5" />
+              <path
+                d="M20 20l2 2"
+                stroke="#A8A29E"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+          <div className="flex flex-col items-center gap-1 text-center">
+            <p className="font-medium font-new-sans text-[#44403C]">
+              No tickets yet
+            </p>
+            <p className="font-new-sans text-[#A8A29E] text-sm">
+              {tab === "active"
+                ? "You don't have any active support tickets."
+                : "No archived tickets found."}
+            </p>
+          </div>
+          {tab === "active" && (
+            <Link
+              href={APP_ROUTES.TICKETS.CREATE}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[#A8A29E] bg-[#F5F3EF] px-5 font-new-sans text-[#44403C] text-sm transition-colors hover:bg-[#EDE9E3]"
+            >
+              Raise your first ticket
+            </Link>
+          )}
+        </div>
+      )}
+
+      {!isLoading && tickets.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {tickets.map((ticket) => (
+            <button
+              key={ticket.id}
+              type="button"
+              onClick={() => router.push(APP_ROUTES.TICKETS.DETAIL(ticket.id))}
+              className="flex flex-col gap-2 rounded-xl border border-[#D6D3D1] bg-white px-4 py-4 text-left transition-shadow hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="font-medium font-new-sans text-[#44403C]">
+                  {ticket.subject}
+                </span>
+                <span className="font-new-sans text-[#A8A29E] text-xs">
+                  {new Date(ticket.createdAt).toLocaleDateString("en-AE", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+              <span
+                className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 font-medium font-new-sans text-xs ${STATUS_COLORS[ticket.status]}`}
+              >
+                {TICKET_STATUS_LABELS[ticket.status]}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function TicketsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col gap-3 pt-4">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-xl bg-[#EDE9E3]"
+            />
+          ))}
+        </div>
+      }
+    >
+      <TicketsContent />
+    </Suspense>
+  );
+}

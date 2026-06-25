@@ -1,0 +1,214 @@
+export enum UserRole {
+  SELLER = "SELLER",
+  BIDDER = "BIDDER",
+  RETAILER = "RETAILER",
+  AUTHENTICATOR = "AUTHENTICATOR",
+  ADMIN = "ADMIN",
+  SUPER_ADMIN = "SUPER_ADMIN",
+}
+
+export enum UserStatus {
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+}
+
+export enum OtpType {
+  SIGN_UP = "SIGN_UP",
+  FORGOT_PASSWORD = "FORGOT_PASSWORD",
+  BUYBACK_PERIOD_EXTENSION = "BUYBACK_PERIOD_EXTENSION",
+}
+
+export enum MediaType {
+  EMAIL = "EMAIL",
+  PHONE = "PHONE",
+}
+
+export enum Permission {
+  // Users
+  CREATE_USERS = "CREATE_USERS",
+  UPDATE_USERS = "UPDATE_USERS",
+  DELETE_USERS = "DELETE_USERS",
+  READ_USERS = "READ_USERS",
+  EXPORT_USERS = "EXPORT_USERS",
+
+  // Settings
+  READ_SETTINGS = "READ_SETTINGS",
+  UPDATE_SETTINGS = "UPDATE_SETTINGS",
+
+  // Categories
+  READ_CATEGORIES = "READ_CATEGORIES",
+  CREATE_CATEGORIES = "CREATE_CATEGORIES",
+  UPDATE_CATEGORIES = "UPDATE_CATEGORIES",
+  DELETE_CATEGORIES = "DELETE_CATEGORIES",
+
+  // Brands
+  READ_BRANDS = "READ_BRANDS",
+  CREATE_BRANDS = "CREATE_BRANDS",
+  UPDATE_BRANDS = "UPDATE_BRANDS",
+  DELETE_BRANDS = "DELETE_BRANDS",
+
+  // Brand Models
+  READ_BRAND_MODELS = "READ_BRAND_MODELS",
+  CREATE_BRAND_MODELS = "CREATE_BRAND_MODELS",
+  UPDATE_BRAND_MODELS = "UPDATE_BRAND_MODELS",
+  DELETE_BRAND_MODELS = "DELETE_BRAND_MODELS",
+
+  // Buyback Requests
+  READ_BUYBACK_REQUESTS = "READ_BUYBACK_REQUESTS",
+  CREATE_BUYBACK_REQUESTS = "CREATE_BUYBACK_REQUESTS",
+  UPDATE_BUYBACK_REQUESTS = "UPDATE_BUYBACK_REQUESTS",
+  DELETE_BUYBACK_REQUESTS = "DELETE_BUYBACK_REQUESTS",
+
+  // Buybacks
+  READ_BUYBACKS = "READ_BUYBACKS",
+  CREATE_BUYBACKS = "CREATE_BUYBACKS",
+  UPDATE_BUYBACKS = "UPDATE_BUYBACKS",
+  DELETE_BUYBACKS = "DELETE_BUYBACKS",
+
+  // Admins
+  READ_ADMINS = "READ_ADMINS",
+  CREATE_ADMINS = "CREATE_ADMINS",
+  UPDATE_ADMINS = "UPDATE_ADMINS",
+  DELETE_ADMINS = "DELETE_ADMINS",
+
+  // Admin Roles
+  READ_ADMIN_ROLES = "READ_ADMIN_ROLES",
+  CREATE_ADMIN_ROLES = "CREATE_ADMIN_ROLES",
+  UPDATE_ADMIN_ROLES = "UPDATE_ADMIN_ROLES",
+  DELETE_ADMIN_ROLES = "DELETE_ADMIN_ROLES",
+
+  // Authenticators
+  READ_AUTHENTICATORS = "READ_AUTHENTICATORS",
+
+  // Payments
+  READ_PAYMENTS = "READ_PAYMENTS",
+
+  // Assets
+  READ_ASSETS = "READ_ASSETS",
+  UPDATE_ASSETS = "UPDATE_ASSETS",
+
+  // Delivery
+  READ_DELIVERY = "READ_DELIVERY",
+  UPDATE_DELIVERY = "UPDATE_DELIVERY",
+  CREATE_DELIVERY = "CREATE_DELIVERY",
+  DELETE_DELIVERY = "DELETE_DELIVERY",
+
+  // Tickets
+  READ_TICKETS = "READ_TICKETS",
+  UPDATE_TICKETS = "UPDATE_TICKETS",
+}
+
+export interface SignUpRequest {
+  password: string;
+  firstName: string;
+  lastName: string;
+  patronymic?: string;
+  phoneOtpId: string;
+  emailOtpId: string;
+  role: UserRole;
+  phone: string;
+}
+
+export interface SendOtpRequest {
+  email?: string;
+  phone?: string;
+  type: OtpType;
+  mediaType?: MediaType;
+}
+
+export interface VerifyOtpRequest extends SendOtpRequest {
+  otp: string;
+  mediaType: MediaType;
+}
+
+export interface SignInRequest {
+  email: string;
+  password: string;
+}
+
+export interface ChangeTempPasswordRequest {
+  email: string;
+  newPassword: string;
+  session: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+  accessToken: string;
+}
+
+export interface SignOutRequest {
+  accessToken: string;
+}
+
+export interface ForgotPasswordRequest {
+  email?: string;
+  phone?: string;
+  mediaType: MediaType;
+}
+
+export interface ConfirmForgotPasswordRequest {
+  otpId: string;
+  newPassword: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  idToken: string;
+}
+
+export interface SignInSuccessResponse {
+  status: "SUCCESS";
+  payload: AuthTokens;
+}
+
+export interface SignInChallengeResponse {
+  status: "CHALLENGE";
+  challengeName: "NEW_PASSWORD_REQUIRED";
+  session: string;
+  challengeParameters: Record<string, unknown>;
+  message: string;
+}
+
+export interface SignInFailedResponse {
+  status: "FAILED";
+  message: string;
+}
+
+export type SignInResponse =
+  | SignInSuccessResponse
+  | SignInChallengeResponse
+  | SignInFailedResponse;
+
+export interface SendOtpResponse {
+  status: "SUCCESS";
+  types: OtpType[];
+  validity: number;
+  resendAfter: number;
+  message: string;
+  otp?: string;
+}
+
+export interface OtpEntity {
+  id: string;
+  approved: boolean;
+  updatedAt: string;
+}
+
+export interface ForgotPasswordResponse {
+  status: "SUCCESS";
+  message: string;
+  otp?: string;
+}
+
+export interface ConfirmForgotPasswordResponse {
+  status: "SUCCESS";
+  message: string;
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+  idToken: string;
+}

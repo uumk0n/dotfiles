@@ -1,0 +1,275 @@
+"use client";
+
+import { cn } from "@/shared/lib/ui/cn";
+import Image from "next/image";
+import type { FC } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const WAVE_BG_SRC = "/new-design-images/carousel-waves.svg";
+
+const IMG_UNION_STATE_1 = "/new-design-images/loading/state_1/union_state_1.svg";
+
+const IMG_STATE_2 = "/new-design-images/loading/state_2/img_state_2.svg";
+const IMG_LIQUID_LUXURY_STATE_2 = "/new-design-images/loading/state_2/liquid_luxury_state_2.svg";
+const IMG_VECTOR_STATE_2 = "/new-design-images/loading/state_2/vector_state_2.svg";
+const IMG_VECTOR_1_STATE_2 = "/new-design-images/loading/state_2/vector_1_state_2.svg";
+const IMG_VECTOR_2_STATE_2 = "/new-design-images/loading/state_2/vector_2_state_2.svg";
+const IMG_VECTOR_3_STATE_2 = "/new-design-images/loading/state_2/vector_3_state_2.svg";
+const IMG_VECTOR_4_STATE_2 = "/new-design-images/loading/state_2/vector_4_state_2.svg";
+const IMG_UNION_STATE_2 = "/new-design-images/loading/state_2/union_state_2.svg";
+const IMG_VECTOR_5_STATE_2 = "/new-design-images/loading/state_2/vector_5_state_2.svg";
+
+const WORDMARK_LETTERS = [
+  { src: IMG_VECTOR_STATE_2, width: 13.691, height: 32.596 },
+  { src: IMG_VECTOR_1_STATE_2, width: 26.45, height: 33.248 },
+  { src: IMG_VECTOR_2_STATE_2, width: 26.729, height: 32.596 },
+  { src: IMG_VECTOR_3_STATE_2, width: 13.691, height: 32.596 },
+  { src: IMG_VECTOR_STATE_2, width: 13.691, height: 32.596 },
+  { src: IMG_VECTOR_5_STATE_2, width: 33.9, height: 33.9 },
+  { src: IMG_VECTOR_4_STATE_2, width: 46.334, height: 33.248 },
+] as const;
+
+const ANIMATION_START_DELAY_MS = 500;
+const LETTER_INTERVAL_MS = 150;
+const TRADEMARK_EXTRA_DELAY_MS = 100;
+const TAGLINE_EXTRA_DELAY_MS = 350;
+
+function clampProgress(progress: number): number {
+  if (progress < 0) return 0;
+  if (progress > 100) return 100;
+  return progress;
+}
+
+interface UploadProgressScreenProps {
+  className?: string;
+  message?: string;
+
+  /**
+   * If provided, the screen will be rendered statically at this progress value.
+   * If omitted, the progress animates from `initialProgress` to `targetProgress`.
+   */
+  progress?: number;
+  initialProgress?: number;
+  targetProgress?: number;
+  durationMs?: number;
+}
+
+function LoadingIcon() {
+  const [letterCount, setLetterCount] = useState(0);
+  const [trademarkVisible, setTrademarkVisible] = useState(false);
+  const [taglineVisible, setTaglineVisible] = useState(false);
+  const totalLetters = WORDMARK_LETTERS.length;
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    for (let index = 0; index < totalLetters; index++) {
+      timers.push(
+        setTimeout(
+          () => setLetterCount(index + 1),
+          ANIMATION_START_DELAY_MS + index * LETTER_INTERVAL_MS,
+        ),
+      );
+    }
+
+    timers.push(
+      setTimeout(
+        () => setTrademarkVisible(true),
+        ANIMATION_START_DELAY_MS + totalLetters * LETTER_INTERVAL_MS + TRADEMARK_EXTRA_DELAY_MS,
+      ),
+    );
+
+    timers.push(
+      setTimeout(
+        () => setTaglineVisible(true),
+        ANIMATION_START_DELAY_MS +
+          totalLetters * LETTER_INTERVAL_MS +
+          TRADEMARK_EXTRA_DELAY_MS +
+          TAGLINE_EXTRA_DELAY_MS,
+      ),
+    );
+
+    return () => {
+      for (const timer of timers) {
+        clearTimeout(timer);
+      }
+    };
+  }, [totalLetters]);
+
+  return (
+    <div className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 flex w-[209px] flex-col items-center gap-[13px]">
+      <div className="relative h-[58px] w-[68px] shrink-0" aria-hidden>
+        <div className="absolute inset-[-0.15%_-0.12%]">
+          <Image
+            src={letterCount > 0 ? IMG_UNION_STATE_2 : IMG_UNION_STATE_1}
+            alt=""
+            fill
+            unoptimized
+            className="absolute block size-full max-w-none transition-opacity duration-300"
+            aria-hidden
+          />
+        </div>
+      </div>
+
+      <div className="relative flex w-full shrink-0 flex-col items-center gap-[7px]">
+        <div className="relative flex items-end justify-center gap-[2px]" aria-hidden>
+          {WORDMARK_LETTERS.map((letter, index) => (
+            <div
+              key={`${letter.src}-${index}`}
+              style={{
+                opacity: index < letterCount ? 1 : 0,
+                transform: index < letterCount ? "translateY(0)" : "translateY(6px)",
+                transition: "opacity 0.2s ease-out, transform 0.2s ease-out",
+              }}
+            >
+              <Image
+                src={letter.src}
+                alt=""
+                width={letter.width}
+                height={letter.height}
+                unoptimized
+                aria-hidden
+              />
+            </div>
+          ))}
+          <div
+            className="relative mb-[26px] ml-[2px] size-[8px] overflow-clip self-start"
+            style={{
+              opacity: trademarkVisible ? 1 : 0,
+              transition: "opacity 0.2s ease-out",
+            }}
+            aria-hidden
+          >
+            <div className="absolute inset-0 size-[8px]">
+              <Image
+                src={IMG_STATE_2}
+                alt=""
+                fill
+                unoptimized
+                className="absolute block size-full max-w-none"
+                aria-hidden
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="relative h-[8.12px] w-[189.678px] shrink-0"
+          style={{
+            opacity: taglineVisible ? 1 : 0,
+            transform: taglineVisible ? "translateY(0)" : "translateY(4px)",
+            transition: "opacity 0.35s ease-out, transform 0.35s ease-out",
+          }}
+          aria-hidden
+        >
+          <Image
+            src={IMG_LIQUID_LUXURY_STATE_2}
+            alt=""
+            fill
+            unoptimized
+            className="absolute block size-full max-w-none"
+            aria-hidden
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const UploadProgressScreen: FC<UploadProgressScreenProps> = ({
+  className,
+  message,
+  progress: progressProp,
+  initialProgress = 10,
+  targetProgress = 53,
+  durationMs = 5500,
+}) => {
+  const [progress, setProgress] = useState<number>(() =>
+    typeof progressProp === "number" ? clampProgress(progressProp) : initialProgress,
+  );
+
+  const resolvedProgressProp = useMemo(
+    () => (typeof progressProp === "number" ? clampProgress(progressProp) : null),
+    [progressProp],
+  );
+
+  useEffect(() => {
+    if (resolvedProgressProp !== null) {
+      setProgress(resolvedProgressProp);
+      return;
+    }
+
+    const start = Date.now();
+    let lastProgressValue: number | null = null;
+
+    let rafId = 0;
+
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const t = Math.min(1, elapsed / durationMs);
+      const eased = 1 - (1 - t) ** 3;
+      const next = clampProgress(initialProgress + (targetProgress - initialProgress) * eased);
+      const rounded = Math.round(next);
+
+      if (rounded !== lastProgressValue) {
+        lastProgressValue = rounded;
+        setProgress(rounded);
+      }
+
+      if (t < 1) {
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(rafId);
+  }, [resolvedProgressProp, durationMs, initialProgress, targetProgress]);
+
+  const safeProgress = clampProgress(progress);
+
+  return (
+    <section
+      className={cn(
+        "new-design relative flex h-full w-full items-center justify-center overflow-hidden bg-[#F5F3EF]",
+        className,
+      )}
+      aria-label="Loading"
+      aria-live="polite"
+    >
+      <Image
+        src={WAVE_BG_SRC}
+        alt=""
+        fill
+        unoptimized
+        priority
+        aria-hidden
+        className="absolute inset-0 object-cover opacity-[0.18]"
+      />
+
+      <LoadingIcon />
+
+      <div className="pointer-events-none absolute right-0 bottom-0 left-0 h-[10px]">
+        <div
+          className="absolute bottom-0 left-0 h-[10px] bg-[#021171]"
+          style={{ width: `${safeProgress}%` }}
+        />
+      </div>
+
+      <div
+        className="-translate-x-1/2 -translate-y-1/2 pointer-events-none absolute bottom-[10px] text-center"
+        style={{ left: `clamp(5rem, ${safeProgress}%, calc(100% - 5rem))` }}
+      >
+        <span className="whitespace-nowrap font-extralight font-new-serif text-[#021171] text-[72px] not-italic leading-[1.1] tracking-[0px]">
+          {safeProgress}%
+        </span>
+      </div>
+
+      {message ? (
+        <p className="-translate-x-1/2 absolute bottom-[30px] left-1/2 z-10 w-full max-w-[90%] text-center font-new-sans text-[#A8A29E] text-sm">
+          {message}
+        </p>
+      ) : null}
+    </section>
+  );
+};

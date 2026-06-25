@@ -1,0 +1,25 @@
+import { BuybackServicePage } from "@/pages-layer/services/buyback/ui/buyback";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sell with Buyback | Unlock Liquidity | LuxFlow",
+  description:
+    "Access liquidity with discretion while preserving ownership. Sell your luxury assets with the option to reacquire them, supported by expert valuation, secure custody, and private execution.",
+  openGraph: {
+    title: "Sell with Buyback | Flexible Liquidity | LuxFlow",
+    description:
+      "Access liquidity while retaining ownership options with secure custody, clear terms, and a defined buyback period. Fast. Secure. Discreet",
+    images: [{ url: "/og-buyback.png" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sell with Buyback | Flexible Liquidity | LuxFlow",
+    description:
+      "Access liquidity while retaining ownership options with secure custody, clear terms, and a defined buyback period. Fast. Secure. Discreet",
+    images: ["/og-buyback.png"],
+  },
+};
+
+export default function Page() {
+  return <BuybackServicePage />;
+}

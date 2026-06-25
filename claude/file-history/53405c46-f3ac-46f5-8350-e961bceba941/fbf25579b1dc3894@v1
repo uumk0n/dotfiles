@@ -1,0 +1,115 @@
+import { Body, Controller, Post } from '@nestjs/common';
+
+import { AuthService } from '@/modules/auth';
+import { MediaType } from '@/db';
+
+import {
+  ChangeTempPasswordRequestDto,
+  ConfirmForgotPasswordDto,
+  EmailExistsRequestDto,
+  ForgotPasswordDto,
+  PhoneExistsRequestDto,
+  RefreshTokenRequestDto,
+  SendOtpDto,
+  SignInRequestDto,
+  SignOutRequestDto,
+  SignUpRequestDto,
+  VerifyOtpDto,
+} from './dtos';
+import { OtpService } from '@/modules/otp';
+
+@Controller('/')
+export class AuthController {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly optService: OtpService,
+  ) {}
+
+  @Post('/sign-up')
+  async signUp(@Body() body: SignUpRequestDto) {
+    return this.authService.signUp(body);
+  }
+
+  @Post('/send-otp')
+  async sendOtp(@Body() body: SendOtpDto) {
+    // SIGN_UP with both email and phone: handle both channels in one call
+    // so they share a single OTP code.
+    if (body.email && body.phone) {
+      return this.optService.sendOtp([
+        { source: body.email, type: body.type, mediaType: MediaType.Email },
+        { source: body.phone, type: body.type, mediaType: MediaType.Phone },
+      ]);
+    }
+
+    const source = this.optService.validateOtpSource(
+      body.mediaType!,
+      body.email,
+      body.phone,
+    );
+
+    return this.optService.sendOtp([
+      {
+        source,
+        type: body.type,
+        mediaType: body.mediaType!,
+      },
+    ]);
+  }
+
+  @Post('/verify-otp')
+  async verifyOtp(@Body() body: VerifyOtpDto) {
+    const { mediaType, email, phone } = body;
+
+    const source = this.optService.validateOtpSource(mediaType!, email, phone);
+
+    return this.optService.verifyOtp({
+      source,
+      otp: body.otp,
+      type: body.type,
+    });
+  }
+
+  @Post('/sign-in')
+  async signIn(@Body() body: SignInRequestDto) {
+    return this.authService.signIn(body);
+  }
+
+  @Post('/change-temp-password')
+  async changeTempPassword(@Body() body: ChangeTempPasswordRequestDto) {
+    return this.authService.respondToNewPasswordChallenge(body);
+  }
+
+  @Post('/refresh-token')
+  async refreshToken(@Body() body: RefreshTokenRequestDto) {
+    const { refreshToken, accessToken } = body;
+
+    return this.authService.refreshToken({ refreshToken, accessToken });
+  }
+
+  @Post('/forgot-password')
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
+    return this.authService.forgotPassword(body);
+  }
+
+  @Post('/confirm-forgot-password')
+  async confirmForgotPassword(@Body() body: ConfirmForgotPasswordDto) {
+    return this.authService.confirmForgotPassword(body);
+  }
+
+  @Post('sign-out')
+  async signOut(@Body() body: SignOutRequestDto) {
+    await this.authService.signOut(body.accessToken);
+  }
+
+  @Post('email-exists')
+  async emailExists(@Body() body: EmailExistsRequestDto) {
+    const exists = await this.authService.emailExists(body.email);
+    return { exists };
+  }
+
+  @Post('phone-exists')
+  async phoneExists(@Body() body: PhoneExistsRequestDto) {
+    const exists = await this.authService.phoneExists(body.phone);
+    return { exists };
+  }
+}

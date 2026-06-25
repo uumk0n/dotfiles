@@ -1,0 +1,18 @@
+0:00 hey guys. Alright, so I wanted to explain, the functionality and layout of this section because right now it is, is a little bit broken versus what is expected.
+0:11 So I'm going to paste a screenshot here of what I'm seeing on a wider screen. And right now what we're seeing is this, for this section on About Page, okay?
+0:21 So, what we're ideally what should happen is that we're going to have, first of all, a 50-50 split on this layout, okay?
+0:29 So it's always going to be 50-50. on the left, on the right side, I'm going to split the right side because it's easier, so these two text will be floating in the center and each will have a max width of 500 pixels, okay?
+0:39 So, regardless of the size of the container, these two will always have 50 ppm. 500 pixels. Now the right side.
+0:48 The right side, since we have a lot of images here, right? All of these images, the idea is that we're going to have two stripes, like two marquees moving.
+0:58 One will be moving downwards and the other one will be moving upwards. So, it, picture it as this, this will be moving automatically like this in a loop, so we're going to be putting presenting all the images and we can fine-tune the speed and the right side will be sliding up.
+1:15 So, we're going to have this movement going up and then this movement going down, okay? So, each of them will be moving again, this one will be moving down, this one will be moving up, alright?
+1:27 Now, how do we fix the scaling? so, it should work something like this like since we always are going to have 50-50, what should happen is that the columns should scale accordingly and the images will scale, scale accordingly, right?
+1:40 So, picture it like in this 50%, this, this column takes roughly 55 or 60% and this one takes 40 and the image will scale proportionally depending on the value.
+1:53 Viewport width, okay? But, so to summarize, we have one, let me just put it this way, one, each column, hold on, let me just put this on a larger size, one second What's going on here?
+2:08 Okay, and why can't I, one sec, alright, so one is each, each column is 50-50 split, okay?
+2:24 Okay, then we have that the right, sorry, left column. Has two subdivisions, so the first subdivision, sorry, what else is here, first subdivision is, let's say, 50%, the other one is 40%, and the images should scale, proportionally.
+2:49 Right? And now I'm missing an L here, okay. And then the left column, meaning the 60% column, will be a marquee.
+3:08 Moving down, right? And the right column, this, this, it refers to these images, right? The left column. So all of this is to the left column.
+3:19 So the column that has 40% will be a marquee. Moving up, And for the cool column, or, let's say, right column, the one that has the text, so the max width of the text is 500 pixels, okay?
+3:39 This is for the text, right? So that way we can, we can move from this, which is what we have, to something more organized from a layout perspective, all right?
+3:50 Thank you.

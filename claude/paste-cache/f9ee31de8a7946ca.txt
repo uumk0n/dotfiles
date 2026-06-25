@@ -1,0 +1,17 @@
+[Nest] 4236  - 04/23/2026, 1:30:13 PM     LOG [NestApplication] Nest application successfully started +1ms
+[Nest] 4236  - 04/23/2026, 1:30:13 PM     LOG [API] Inbound request: POST /auth/refresh-token from ::1
+[Nest] 4236  - 04/23/2026, 1:30:13 PM   ERROR [API] Response: POST /auth/refresh-token - 401 - 6ms
+[Nest] 4236  - 04/23/2026, 1:30:13 PM     LOG [API] Inbound request: POST /auth/refresh-token from ::1
+[Nest] 4236  - 04/23/2026, 1:30:13 PM   ERROR [API] Response: POST /auth/refresh-token - 401 - 0ms
+[Nest] 4236  - 04/23/2026, 1:30:14 PM     LOG [API] Inbound request: POST /auth/refresh-token from ::1
+[Nest] 4236  - 04/23/2026, 1:30:14 PM   ERROR [API] Response: POST /auth/refresh-token - 401 - 1ms
+[Nest] 4236  - 04/23/2026, 1:30:52 PM     LOG [API] Inbound request: POST /auth/oauth/google from ::1
+[Nest] 4236  - 04/23/2026, 1:30:52 PM     LOG [SocialAuthService] [Google] Downloading avatar from: https://lh3.googleusercontent.com/a/ACg8ocI9v1_rd_AHHOyvRT0XsdWKbEvPfhZgP8GfZRDd2ehjJqVhTfk6=s400-c
+[Nest] 4236  - 04/23/2026, 1:30:53 PM     LOG [SocialAuthService] [Google] Avatar content-type: image/png
+[Nest] 4236  - 04/23/2026, 1:30:54 PM     LOG [SocialAuthService] [Google] Avatar uploaded to S3: /files/3bcc052b-e12f-4017-a512-b7bb41e22429
+[Nest] 4236  - 04/23/2026, 1:30:54 PM     LOG [SocialAuthService] [Google] Avatar saved as FileEntity: 3bcc052b-e12f-4017-a512-b7bb41e22429
+[Nest] 4236  - 04/23/2026, 1:30:55 PM     LOG [CognitoService] [Social] User exists in Cognito: uumkon@gmail.com
+[Nest] 4236  - 04/23/2026, 1:30:55 PM     LOG [CognitoService] [Social] Password set for: uumkon@gmail.com
+[Nest] 4236  - 04/23/2026, 1:30:55 PM     LOG [CognitoService] [Social] Signing in: uumkon@gmail.com
+[Nest] 4236  - 04/23/2026, 1:30:56 PM     LOG [CognitoService] [Social] Sign-in successful: uumkon@gmail.com
+[Nest] 4236  - 04/23/2026, 1:30:56 PM     LOG [API] Response: POST /auth/oauth/google - 201 - 4005ms

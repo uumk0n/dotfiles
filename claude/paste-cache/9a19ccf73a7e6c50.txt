@@ -1,0 +1,110 @@
+Google OAuth error: Error [ZodError]: [
+  {
+    "code": "invalid_union",
+    "unionErrors": [
+      {
+        "issues": [
+          {
+            "code": "invalid_type",
+            "expected": "string",
+            "received": "undefined",
+            "path": [
+              "payload",
+              "idToken"
+            ],
+            "message": "Required"
+          }
+        ],
+        "name": "ZodError"
+      },
+      {
+        "issues": [
+          {
+            "received": "SUCCESS",
+            "code": "invalid_literal",
+            "expected": "CHALLENGE",
+            "path": [
+              "status"
+            ],
+            "message": "Invalid literal value, expected \"CHALLENGE\""
+          },
+          {
+            "code": "invalid_literal",
+            "expected": "NEW_PASSWORD_REQUIRED",
+            "path": [
+              "challengeName"
+            ],
+            "message": "Invalid literal value, expected \"NEW_PASSWORD_REQUIRED\""
+          },
+          {
+            "code": "invalid_type",
+            "expected": "string",
+            "received": "undefined",
+            "path": [
+              "session"
+            ],
+            "message": "Required"
+          },
+          {
+            "code": "invalid_type",
+            "expected": "object",
+            "received": "undefined",
+            "path": [
+              "challengeParameters"
+            ],
+            "message": "Required"
+          },
+          {
+            "code": "invalid_type",
+            "expected": "string",
+            "received": "undefined",
+            "path": [
+              "message"
+            ],
+            "message": "Required"
+          }
+        ],
+        "name": "ZodError"
+      },
+      {
+        "issues": [
+          {
+            "received": "SUCCESS",
+            "code": "invalid_literal",
+            "expected": "FAILED",
+            "path": [
+              "status"
+            ],
+            "message": "Invalid literal value, expected \"FAILED\""
+          },
+          {
+            "code": "invalid_type",
+            "expected": "string",
+            "received": "undefined",
+            "path": [
+              "message"
+            ],
+            "message": "Required"
+          }
+        ],
+        "name": "ZodError"
+      }
+    ],
+    "path": [],
+    "message": "Invalid input"
+  }
+]
+    at oauthGoogle (src/entities/auth/api/services.ts:128:34)
+    at async Object.authorize (src/shared/config/auth-config.ts:86:28)
+  126 |   const response = await api.post(API_ROUTES.AUTH.OAUTH_GOOGLE, data);
+  127 |
+> 128 |   return SIGN_IN_RESPONSE_SCHEMA.parse(response.data);
+      |                                  ^
+  129 | }
+  130 |
+  131 | export async function oauthApple( {
+  issues: [Array],
+  addIssue: [Function (anonymous)],
+  addIssues: [Function (anonymous)]
+}
+ POST /api/auth/callback/google-oauth 401 in 1117ms

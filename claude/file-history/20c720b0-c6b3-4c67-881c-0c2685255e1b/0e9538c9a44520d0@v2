@@ -1,0 +1,906 @@
+import { BadRequestException, Injectable, NotFoundException, } from '@nestjs/common';
+
+import { TransactionHost } from '@nestjs-cls/transactional';
+
+import {
+  AccountType,
+  AssetHandoverOption,
+  AssetHandoverType,
+  BuybackEntity,
+  BuybackExtensionEntity,
+  BuybackExtensionType,
+  BuybackRequestStatus,
+  BuybackStatus,
+  EntryDirection,
+  LedgerTransactionType,
+  PaymentEntity,
+  PaymentMethod,
+  PaymentPurpose,
+  SettingKey,
+  UserEntity,
+  UserSetting,
+} from '@/db';
+import { convertMinorUnits, DEFAULT_CURRENCY, SupportedCurrency } from '@/common/currency';
+
+import { ContextService, TransactionalAdapterTypeOrm } from '@/modules/global';
+import { AssetHandoverService, AssetService } from '@/modules/asset';
+
+import { BuybackRequestService } from './buyback-request.service';
+import { ListQuery } from '@/utils';
+import { Brackets } from 'typeorm';
+import { FeeCalculationService, PaymentsService } from '@/modules/payments';
+import { LedgerService } from '@/modules/ledger';
+import { FINAL_EXTENSION_PAYMENT_TYPE, MAX_AUTO_BUYBACK_EXTENSIONS } from '../const/buyback.const';
+import { getExtensionDates } from '@/modules/buyback/lib';
+import { NotificationService, NotificationType } from '@/modules/notification';
+import { StripeOffSessionService } from '@/modules/stripe';
+import { NOWPaymentsCheckoutService } from '@/modules/nowpayments';
+import { BuybackCreateDto, BuybackSearchFilters } from '../types/buyback.dto';
+import { PaypalCheckoutService } from '@/modules/paypal';
+import { BuybackFeeCalculationService } from './buyback-fee-calculation.service';
+import { fromMinorUnits } from '@/common/money';
+import { RenewBuybackResponseDto } from "@/api/app/buyback/dtos";
+import { SettingsService } from '@/modules/settings';
+
+@Injectable()
+export class BuybackService {
+  constructor(
+    private readonly txHost: TransactionHost<TransactionalAdapterTypeOrm>,
+    private readonly assetService: AssetService,
+    private readonly assetHandoverService: AssetHandoverService,
+    private readonly buybackRequestService: BuybackRequestService,
+    private readonly contextService: ContextService,
+    private readonly ledgerService: LedgerService,
+    private readonly feeCalculationService: FeeCalculationService,
+    private readonly notificationService: NotificationService,
+    private readonly paymentsService: PaymentsService,
+    private readonly buybackFeeCalculationService: BuybackFeeCalculationService,
+    private readonly stripeOffSessionService: StripeOffSessionService,
+    private readonly paypalCheckoutService: PaypalCheckoutService,
+    private readonly nowpaymentsCheckoutService: NOWPaymentsCheckoutService,
+    private readonly settingsService: SettingsService,
+  ) { }
+
+  async create(sellerId: string, dto: BuybackCreateDto) {
+    return this.txHost.withTransaction(async () => {
+      const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+      // Create asset
+      const asset = await this.assetService.create(sellerId, dto.asset);
+
+      // Create buyback request
+      const buybackRequest = await this.buybackRequestService.create();
+
+      // Create buyback
+      const buyback = await buybackRepository.save({
+        type: dto.type,
+        sellerId,
+        status: BuybackStatus.Quote,
+        assetId: asset.id,
+        requestId: buybackRequest.id,
+      });
+
+      await this.buybackRequestService.sendForValuationAuto(buybackRequest.id);
+
+      const seller = await this.txHost.tx
+        .getRepository(UserEntity)
+        .findOne({ where: { id: sellerId }, select: ['id', 'lastName'] });
+
+      const assetData = {
+        categoryName: asset.category.name,
+        brandName: asset.categoryFields?.brandName,
+        modelName: asset.categoryFields?.modelName,
+        referenceNumber: asset.categoryFields?.referenceNumber,
+        condition: asset.categoryFields?.condition,
+        extras: asset.extras,
+      };
+
+      // Notify user (email + WhatsApp)
+      await this.notificationService.send(
+        [sellerId],
+        NotificationType.QuoteRequestSubmitted,
+        {
+          userLastName: seller?.lastName ?? '',
+          buybackType: dto.type,
+          buybackRequestId: buybackRequest.id,
+          asset: assetData,
+        },
+      );
+
+      // Notify admins via WhatsApp
+      await this.notificationService.send(
+        'admins',
+        NotificationType.QuoteRequestAdminNotification,
+        {
+          buybackType: dto.type,
+          asset: assetData,
+        },
+      );
+
+      // Notify admins
+      // TODO: [NEW CATEGORY] - check this
+      await this.notificationService.send(
+        'admins',
+        NotificationType.BuybackRequestAdminMajorEvent,
+        {
+          buybackRequestId: buybackRequest.id,
+          asset: {
+            categoryName: asset.category.name,
+          },
+          status: BuybackRequestStatus.New,
+        },
+      );
+
+      return buyback;
+    });
+  }
+
+  async getOne(sellerId: string, buybackId: string) {
+    const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+    const buyback = await buybackRepository.findOne({
+      where: { id: buybackId, sellerId },
+      relations: [
+        'asset',
+        'asset.photos',
+        'asset.category',
+        'asset.handovers',
+        'asset.handovers.courierPartner',
+        'asset.handovers.toCustodyLocation',
+        'asset.handovers.fromCustodyLocation',
+        'asset.handovers.fromUser',
+        'asset.handovers.toUser',
+        'request',
+        'request.preAuthOffer',
+        'request.postAuthOffer',
+        'extensions',
+      ],
+    });
+
+    if (!buyback) {
+      throw new NotFoundException('Buyback not found');
+    }
+
+    return buyback;
+  }
+
+  async getMany(
+    listQuery: ListQuery,
+    filters: BuybackSearchFilters & { active: boolean },
+  ) {
+    const userId = this.contextService.context.user.id;
+
+    const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+    const query = buybackRepository
+      .createQueryBuilder('buyback')
+      .select([
+        'buyback.id',
+        'buyback.type',
+        'buyback.status',
+        'buyback.createdAt',
+        'buyback.requestId',
+      ])
+      .leftJoin('buyback.asset', 'asset')
+      .addSelect(['asset.id', 'asset.meta', 'asset.categoryFields'])
+      .leftJoin('asset.category', 'category')
+      .addSelect(['category.id', 'category.name'])
+      .leftJoin('asset.photos', 'photos')
+      .addSelect(['photos.id'])
+      .where('buyback.sellerId = :userId', { userId })
+      .skip(listQuery.skip)
+      .take(listQuery.take)
+      .orderBy('buyback.createdAt', listQuery?.order || 'DESC');
+
+    if (filters?.types) {
+      query.andWhere('buyback.type IN (:...types)', { types: filters.types });
+    }
+
+    if (filters?.categories) {
+      query.andWhere('category.id IN (:...categories)', {
+        categories: filters.categories,
+      });
+    }
+
+    if (filters?.search) {
+      query.andWhere(
+        new Brackets((qb) => {
+          qb.where('category.name ILIKE :search')
+            .orWhere("asset.categoryFields ->> 'brandName' ILIKE :search")
+            .orWhere("asset.categoryFields ->> 'modelName' ILIKE :search");
+        }),
+        { search: `%${filters.search}%` },
+      );
+    }
+
+    if (filters.active) {
+      query.andWhere('buyback.status IN (:...statuses)', {
+        statuses: [BuybackStatus.Active, BuybackStatus.Extended],
+      });
+    } else {
+      query.andWhere('buyback.status NOT IN (:...statuses)', {
+        statuses: [
+          BuybackStatus.Quote,
+          BuybackStatus.Active,
+          BuybackStatus.Extended,
+        ],
+      });
+    }
+
+    const [results, total] = await query.getManyAndCount();
+
+    return {
+      total,
+      data: results,
+      skip: listQuery.skip,
+      take: listQuery.take,
+    };
+  }
+
+  /**
+   * Renew a buyback with payment processing.
+   * Charges the selected payment method and creates the extension
+   * synchronously (Stripe) or via webhook (PayPal, NOWPayments).
+   */
+  async renew(
+    seller: UserEntity,
+    dto: {
+      buybackId: string;
+      stripeMethodId?: string;
+      paypalMethodId?: string;
+      cryptoAddressId?: string;
+      paypalReturnUrl?: string;
+      paypalCancelUrl?: string;
+    },
+  ): Promise<RenewBuybackResponseDto> {
+    const sellerCurrency = seller.settings[UserSetting.Currency];
+    const sellerId = seller.id;
+
+    const methodCount = [
+      dto.stripeMethodId,
+      dto.paypalMethodId,
+      dto.cryptoAddressId,
+    ].filter(Boolean).length;
+
+    if (methodCount !== 1) {
+      throw new BadRequestException(
+        'Exactly one payment method must be provided',
+      );
+    }
+
+    const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+    const buyback = await buybackRepository.findOne({
+      where: { id: dto.buybackId, sellerId },
+      relations: ['extensions', 'request', 'request.postAuthOffer'],
+    });
+
+    if (!buyback) {
+      throw new NotFoundException('Buyback not found');
+    }
+
+    // Validate the extension is allowed before creating a payment
+    await this.canExtend(buyback);
+
+    if (!buyback.request?.postAuthOffer?.data) {
+      throw new BadRequestException('Buyback offer data not found');
+    }
+
+    const fees = this.buybackFeeCalculationService.calculateExtensionFees(
+      buyback.request.postAuthOffer.data,
+      1,
+    );
+    const totalFeesInSellerCurrency = convertMinorUnits(fees.total, 'USD', seller.settings[UserSetting.Currency])
+
+    const paymentMethod = dto.stripeMethodId
+      ? PaymentMethod.StripeCard
+      : dto.paypalMethodId
+        ? PaymentMethod.PayPalAccount
+        : PaymentMethod.NowPaymentsCrypto;
+
+    let payment: PaymentEntity;
+
+    if (dto.paypalMethodId) {
+      payment = await this.paymentsService.create(sellerId, {
+        purpose: PaymentPurpose.Fee,
+        method: paymentMethod,
+        amountTotal: fromMinorUnits(fees.total),
+        currency: 'USD',
+        metadata: { type: 'BUYBACK_EXTENSION', buybackId: dto.buybackId },
+      } as any);
+
+      const { url } = await this.paypalCheckoutService.createCheckoutSession(
+        sellerId,
+        payment.id,
+        dto.paypalMethodId,
+        dto.paypalReturnUrl,
+        dto.paypalCancelUrl,
+      );
+
+      return { status: 'pending', approveUrl: url };
+    }
+
+    payment = await this.paymentsService.create(sellerId, {
+      purpose: PaymentPurpose.Fee,
+      method: paymentMethod,
+      amountTotal: fromMinorUnits(totalFeesInSellerCurrency),
+      currency: sellerCurrency,
+      metadata: { type: 'BUYBACK_EXTENSION', buybackId: dto.buybackId },
+    } as any);
+
+    if (dto.stripeMethodId) {
+      await this.stripeOffSessionService.chargeOffSession(
+        seller.id,
+        totalFeesInSellerCurrency,
+        dto.stripeMethodId,
+        sellerCurrency
+      );
+
+      await this.extend(dto.buybackId);
+
+      await this.ledgerService.postTransaction({
+        type: LedgerTransactionType.FEE,
+        amountTotal: payment.amountTotal,
+        currency: payment.currency as SupportedCurrency,
+        contextRef: `payment:${payment.id}:сompletion`,
+        entries: [
+          {
+            account: AccountType.USER_WALLET,
+            direction: EntryDirection.DEBIT,
+            amount: payment.amountTotal,
+            userId: payment.userId,
+          },
+          {
+            account: AccountType.FEES_INCOME,
+            direction: EntryDirection.CREDIT,
+            amount: payment.amountTotal,
+            userId: null,
+          },
+        ],
+      })
+
+      return { status: 'succeeded' };
+    }
+
+    // NOWPayments crypto
+    const cryptoSession =
+      await this.nowpaymentsCheckoutService.createCheckoutSession(
+        sellerId,
+        payment.id,
+      );
+
+    return {
+      status: 'pending',
+      paymentAddress: cryptoSession.paymentAddress,
+      nowpaymentsId: cryptoSession.paymentId,
+    };
+  }
+
+  async requestFinalExtension(
+    sellerId: string,
+    buybackId: string,
+  ): Promise<{ success: boolean }> {
+    const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+    const buyback = await buybackRepository.findOne({
+      where: { id: buybackId, sellerId },
+      relations: [
+        'extensions',
+        'asset',
+        'asset.category',
+        'asset.brand',
+        'asset.model',
+      ],
+    });
+
+    if (!buyback) {
+      throw new NotFoundException('Buyback not found');
+    }
+
+    this.canRequestWeeklyExtension(buyback);
+
+    await this.markWeeklyExtensionRequested(buybackId, buyback);
+
+    return { success: true };
+  }
+
+  async payFinalExtension(
+    seller: UserEntity,
+    dto: {
+      buybackId: string;
+      stripeMethodId?: string;
+      paypalMethodId?: string;
+      cryptoAddressId?: string;
+      paypalReturnUrl?: string;
+      paypalCancelUrl?: string;
+    },
+  ): Promise<RenewBuybackResponseDto> {
+    const sellerCurrency = seller.settings[UserSetting.Currency];
+    const sellerId = seller.id;
+
+    const methodCount = [
+      dto.stripeMethodId,
+      dto.paypalMethodId,
+      dto.cryptoAddressId,
+    ].filter(Boolean).length;
+
+    if (methodCount !== 1) {
+      throw new BadRequestException(
+        'Exactly one payment method must be provided',
+      );
+    }
+
+    const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+    const buyback = await buybackRepository.findOne({
+      where: { id: dto.buybackId, sellerId },
+      relations: ['extensions', 'request', 'request.postAuthOffer'],
+    });
+
+    if (!buyback) {
+      throw new NotFoundException('Buyback not found');
+    }
+
+    if (buyback.status !== BuybackStatus.ExtensionApproved) {
+      throw new BadRequestException(
+        'Final extension must be approved by admin before payment',
+      );
+    }
+
+    if (!buyback.request?.postAuthOffer?.data) {
+      throw new BadRequestException('Buyback offer data not found');
+    }
+
+    const fees = this.buybackFeeCalculationService.calculateExtensionFees(
+      buyback.request.postAuthOffer.data,
+      1,
+    );
+
+    const totalFeesInSellerCurrency = convertMinorUnits(
+      fees.total,
+      'USD',
+      sellerCurrency,
+    );
+
+    const paymentMethod = dto.stripeMethodId
+      ? PaymentMethod.StripeCard
+      : dto.paypalMethodId
+        ? PaymentMethod.PayPalAccount
+        : PaymentMethod.NowPaymentsCrypto;
+
+    const payment = await this.paymentsService.create(sellerId, {
+      purpose: PaymentPurpose.Fee,
+      method: paymentMethod,
+      amountTotal: totalFeesInSellerCurrency,
+      currency: sellerCurrency,
+      metadata: {
+        type: FINAL_EXTENSION_PAYMENT_TYPE,
+        buybackId: dto.buybackId,
+      },
+    } as any);
+
+    if (dto.stripeMethodId) {
+      await this.stripeOffSessionService.chargeOffSession(
+        seller.id,
+        totalFeesInSellerCurrency,
+        dto.stripeMethodId,
+        sellerCurrency,
+      );
+
+      await this.createFinalExtension(dto.buybackId);
+
+      return { status: 'succeeded' };
+    }
+
+    if (dto.paypalMethodId) {
+      const { url } = await this.paypalCheckoutService.createCheckoutSession(
+        sellerId,
+        payment.id,
+        dto.paypalMethodId,
+        dto.paypalReturnUrl,
+        dto.paypalCancelUrl,
+      );
+
+      return { status: 'pending', approveUrl: url };
+    }
+
+    // NOWPayments crypto
+    const cryptoSession =
+      await this.nowpaymentsCheckoutService.createCheckoutSession(
+        sellerId,
+        payment.id,
+      );
+
+    return {
+      status: 'pending',
+      paymentAddress: cryptoSession.paymentAddress,
+      nowpaymentsId: cryptoSession.paymentId,
+    };
+  }
+
+  /**
+   * Create the final extension entry and transition buyback to Extended.
+   * Called after successful payment (synchronously for Stripe, via webhook for PayPal/crypto).
+   */
+  async createFinalExtension(buybackId: string): Promise<void> {
+    return this.txHost.withTransaction(async () => {
+      const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+      const buyback = await buybackRepository.findOne({
+        where: { id: buybackId },
+        relations: [
+          'extensions',
+          'asset',
+          'asset.category',
+          'asset.brand',
+          'asset.model',
+        ],
+      });
+
+      if (!buyback) {
+        throw new NotFoundException('Buyback not found');
+      }
+
+      const buybackSettings = await this.settingsService.getOne(
+        SettingKey.Buyback,
+      );
+
+      const { startDate, endDate } = getExtensionDates(
+        buyback.extensions,
+        buybackSettings.finalExtensionDuration,
+      );
+
+      const extensionRepository = this.txHost.tx.getRepository(
+        BuybackExtensionEntity,
+      );
+
+      await extensionRepository.update(
+        { buybackId, isFinal: true },
+        { isFinal: false },
+      );
+
+      await extensionRepository.save({
+        buybackId,
+        type: BuybackExtensionType.Manual,
+        month: buyback.extensions.length + 1,
+        startDate,
+        endDate,
+        isFinal: true,
+      });
+
+      await buybackRepository.save({
+        id: buybackId,
+        status: BuybackStatus.Extended,
+      });
+
+      await this.buybackRequestService.recomputeDetails(buybackId);
+
+      await this.notificationService.send(
+        'admins',
+        NotificationType.BuybackAdminMinorEvent,
+        {
+          buybackId,
+          asset: {
+            categoryName: buyback.asset?.category?.name ?? '',
+          },
+          status: BuybackStatus.Extended,
+        },
+      );
+    });
+  }
+
+  async markWeeklyExtensionRequested(buybackId: string, existingBuyback?: BuybackEntity) {
+    return this.txHost.withTransaction(async () => {
+      const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+      const buyback = existingBuyback ?? await buybackRepository.findOne({
+        where: { id: buybackId },
+        relations: ['asset', 'asset.category', 'asset.brand', 'asset.model'],
+      });
+
+      if (!buyback) {
+        throw new NotFoundException('Buyback not found');
+      }
+
+      await buybackRepository.save({
+        id: buybackId,
+        status: BuybackStatus.ExtensionRequested,
+      });
+
+      // TODO: [NEW CATEGORY] - add new fields here
+      await this.notificationService.send(
+        'admins',
+        NotificationType.BuybackAdminMajorEvent,
+        {
+          buybackId,
+          asset: {
+            categoryName: buyback.asset?.category?.name ?? '',
+          },
+          status: BuybackStatus.ExtensionRequested,
+        },
+      );
+    });
+  }
+
+  canRequestWeeklyExtension(buyback: BuybackEntity) {
+    if (
+      ![BuybackStatus.Active, BuybackStatus.Extended].includes(buyback.status)
+    ) {
+      throw new BadRequestException('Invalid buyback status');
+    }
+
+    if (buyback.extensions.length !== MAX_AUTO_BUYBACK_EXTENSIONS) {
+      throw new BadRequestException(
+        'Weekly extension is only available after all automatic extensions have been used',
+      );
+    }
+  }
+
+  async buyback(sellerId: string, buybackId: string) {
+    return this.txHost.withTransaction(async () => {
+      const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+      const buyback = await buybackRepository.findOne({
+        where: { id: buybackId, sellerId },
+        relations: ['asset', 'asset.category'],
+      });
+
+      if (!buyback) {
+        throw new NotFoundException('Buyback not found');
+      }
+
+      if (
+        ![BuybackStatus.Active, BuybackStatus.Extended].includes(buyback.status)
+      ) {
+        throw new BadRequestException('Invalid buyback status');
+      }
+
+      // Check user has sufficient balance
+      if (!buyback.computedDetails) {
+        throw new BadRequestException('Buyback details not computed');
+      }
+
+      const repaymentAmount = buyback.computedDetails.outstandingAmountCents;
+
+      const userBalance = await this.ledgerService.getBalance(sellerId);
+
+      if (userBalance < repaymentAmount) {
+        const shortfall = repaymentAmount - userBalance;
+        const recommendedTopUp =
+          this.feeCalculationService.calculateTopUpRequired(shortfall);
+
+        throw new BadRequestException({
+          error: 'INSUFFICIENT_BALANCE',
+          message: 'Insufficient wallet balance for buyback repayment',
+          details: {
+            currentBalance: userBalance,
+            requiredAmount: repaymentAmount,
+            shortfall,
+            recommendedTopUp, // Minimum amount needed (payment fees apply separately)
+          },
+        });
+      }
+
+      // Post loan repayment to ledger
+      // User pays back loan from their wallet balance
+      const userRepository = this.txHost.tx.getRepository(UserEntity);
+      const userForCurrency = await userRepository.findOne({
+        where: { id: sellerId },
+        select: ['id', 'settings'],
+      });
+      const currency =
+        userForCurrency?.settings?.[UserSetting.Currency] ?? DEFAULT_CURRENCY;
+      const repaymentAmountInCurrency = convertMinorUnits(
+        repaymentAmount,
+        'USD',
+        currency,
+      );
+
+      await this.ledgerService.postTransaction({
+        type: LedgerTransactionType.LOAN_REPAYMENT,
+        currency,
+        amountTotal: repaymentAmountInCurrency,
+        contextRef: `buyback:${buybackId}:repayment`,
+        entries: [
+          {
+            account: AccountType.USER_WALLET,
+            direction: EntryDirection.DEBIT,
+            amount: repaymentAmountInCurrency,
+            userId: sellerId,
+          },
+          {
+            account: AccountType.PLATFORM_CASH,
+            direction: EntryDirection.CREDIT,
+            amount: repaymentAmountInCurrency,
+            userId: null,
+          },
+        ],
+      });
+
+      // Update buyback status to PaidBuyback — closing happens later when asset is picked up
+      await buybackRepository.save({
+        id: buybackId,
+        status: BuybackStatus.PaidBuyback,
+        computedDetails: {
+          ...buyback.computedDetails,
+          paidOut: new Date(),
+        },
+      });
+
+      await this.notificationService.send(
+        'admins',
+        NotificationType.BuybackAdminMinorEvent,
+        {
+          buybackId,
+          asset: {
+            categoryName: buyback.asset.category.name,
+          },
+          status: BuybackStatus.PaidBuyback,
+        },
+      );
+    });
+  }
+
+  /**
+   * Extend a buyback. Main logic used by both user and admin.
+   *
+   * @param buybackId
+   * @param isManual - If true, the extension is manual (by admin)
+   */
+  async extend(buybackId: string, isManual = false) {
+    const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+    const buyback = await buybackRepository.findOne({
+      where: { id: buybackId },
+      relations: [
+        'extensions',
+        'asset',
+        'asset.category',
+      ],
+    });
+
+    if (!buyback) {
+      throw new NotFoundException('Buyback not found');
+    }
+
+    const { monthToExtend } = await this.canExtend(buyback, isManual);
+
+    const { startDate, endDate } = getExtensionDates(buyback.extensions);
+
+    return this.txHost.withTransaction(async () => {
+      const buybackExtensionRepository = this.txHost.tx.getRepository(
+        BuybackExtensionEntity,
+      );
+
+      // mark previous extensions as not final
+      await buybackExtensionRepository.update(
+        {
+          buybackId,
+          isFinal: true,
+        },
+        { isFinal: false },
+      );
+
+      await buybackExtensionRepository.save({
+        buybackId,
+        type: isManual
+          ? BuybackExtensionType.Manual
+          : BuybackExtensionType.Automatic,
+        month: monthToExtend,
+        startDate,
+        endDate,
+        isFinal: true,
+      });
+
+      if (buyback.status !== BuybackStatus.Extended) {
+        const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+        await buybackRepository.save({
+          id: buybackId,
+          status: BuybackStatus.Extended,
+        });
+      }
+
+      const fields = buyback.asset?.categoryFields || {};
+      // TODO: [NEW CATEGORY] - add new fields here
+      await this.notificationService.send(
+        'admins',
+        NotificationType.BuybackAdminMinorEvent,
+        {
+          buybackId,
+          asset: {
+            categoryName: buyback.asset.category.name,
+          },
+          status: BuybackStatus.Extended,
+        },
+      );
+
+      if (isManual) {
+        await this.notificationService.send(
+          [buyback.sellerId!],
+          NotificationType.BuybackExtendedByAdmin,
+          {
+            buybackId,
+            asset: {
+              categoryName: buyback.asset.category.name,
+            },
+            status: BuybackStatus.Extended,
+          },
+        );
+      }
+
+      await this.buybackRequestService.recomputeDetails(buybackId);
+    });
+  }
+
+  async canExtend(buyback: BuybackEntity, isManual = false) {
+    if (
+      ![
+        BuybackStatus.Active,
+        BuybackStatus.Extended,
+        BuybackStatus.ExtensionRequested,
+      ].includes(buyback.status)
+    ) {
+      throw new BadRequestException('Invalid buyback status');
+    }
+
+    const monthToExtend = buyback.extensions.length + 1;
+
+    let maxExtensions = MAX_AUTO_BUYBACK_EXTENSIONS;
+
+    if (isManual) {
+      maxExtensions += 1;
+    }
+
+    if (monthToExtend > maxExtensions) {
+      throw new BadRequestException('Max extensions reached');
+    }
+
+    if (isManual && monthToExtend !== maxExtensions) {
+      throw new BadRequestException(
+        'User must reach max automatic extensions first',
+      );
+    }
+
+    return { monthToExtend };
+  }
+
+  async initAssetReturn(
+    sellerId: string,
+    buybackId: string,
+    dto: {
+      assetHandoverOption: AssetHandoverOption;
+      visitDate?: Date;
+    },
+  ) {
+    const buyback = await this.getOne(sellerId, buybackId);
+
+    await this.assetHandoverService.create(
+      buyback.assetId,
+      AssetHandoverType.PlatformToSeller,
+      dto.assetHandoverOption,
+      {
+        toUserId: sellerId,
+      },
+    );
+
+    // Add visit date if in-person
+    if (dto.assetHandoverOption === AssetHandoverOption.InPerson) {
+      await this.assetHandoverService.addDeliveryInfo(buyback.assetId, {
+        visitDate: dto.visitDate,
+      });
+    }
+  }
+
+  async delete(buybackId: string): Promise<void> {
+    const buybackRepository = this.txHost.tx.getRepository(BuybackEntity);
+
+    const result = await buybackRepository.softDelete(buybackId);
+
+    if (result.affected && result.affected === 0) {
+      throw new NotFoundException('Buyback not found');
+    }
+
+    return;
+  }
+}

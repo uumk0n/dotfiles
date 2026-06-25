@@ -1,0 +1,18 @@
+import { RouteTree } from '@nestjs/core';
+
+import { FilesPublicApiModule } from './files';
+import { TicketsPublicApiModule } from './tickets';
+
+export const publicApiRoutes: RouteTree = {
+  path: '/public',
+  children: [
+    {
+      path: 'tickets',
+      module: TicketsPublicApiModule,
+    },
+    {
+      path: 'files',
+      module: FilesPublicApiModule,
+    },
+  ],
+};

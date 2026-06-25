@@ -1,0 +1,350 @@
+"use client";
+
+import { formatDate } from "@/shared/lib/utils/format-date";
+import {
+  type BuybackRequestEvent,
+  BuybackRequestStatus,
+} from "@/shared/types/buyback-request.types";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/shared/ui/shadcn/accordion";
+import { useMemo } from "react";
+
+interface Step {
+  id: number;
+  label: string;
+  statuses: BuybackRequestStatus[];
+}
+
+export const STEPS: Step[] = [
+  {
+    id: 1,
+    label: "Request in Review",
+    statuses: [
+      BuybackRequestStatus.New,
+      BuybackRequestStatus.PendingValuation,
+      BuybackRequestStatus.ValuationReceived,
+    ],
+  },
+  {
+    id: 2,
+    label: "Indicative Offer Approval",
+    statuses: [
+      BuybackRequestStatus.PreAuthOfferSent,
+      BuybackRequestStatus.PreAuthVerificationFailed,
+      BuybackRequestStatus.RejectedPreAuthOffer,
+      BuybackRequestStatus.PreAuthOfferExpired,
+    ],
+  },
+  {
+    id: 3,
+    label: "Item Reception",
+    statuses: [BuybackRequestStatus.PreAuthOfferAccepted],
+  },
+  {
+    id: 4,
+    label: "Final Offer Approval",
+    statuses: [
+      BuybackRequestStatus.AssetReceived,
+      BuybackRequestStatus.FinalOfferSent,
+      BuybackRequestStatus.PendingAuth,
+      BuybackRequestStatus.AuthCompleted,
+      BuybackRequestStatus.PendingEntrupy,
+      BuybackRequestStatus.KycPending,
+      BuybackRequestStatus.KycApproved,
+      BuybackRequestStatus.PostAuthVerificationFailed,
+      BuybackRequestStatus.KYCFailed,
+      BuybackRequestStatus.RejectedPostAuthOffer,
+      BuybackRequestStatus.PostAuthOfferExpired,
+    ],
+  },
+  {
+    id: 5,
+    label: "Buyback Activation",
+    statuses: [BuybackRequestStatus.TransactionPending],
+  },
+  {
+    id: 6,
+    label: "Buyback Payment",
+    statuses: [BuybackRequestStatus.FinalOfferAccepted],
+  },
+];
+
+const REJECTED_STATUSES = [
+  BuybackRequestStatus.PreAuthVerificationFailed,
+  BuybackRequestStatus.PostAuthVerificationFailed,
+  BuybackRequestStatus.KYCFailed,
+  BuybackRequestStatus.RejectedPreAuthOffer,
+  BuybackRequestStatus.RejectedPostAuthOffer,
+  BuybackRequestStatus.PreAuthOfferExpired,
+  BuybackRequestStatus.PostAuthOfferExpired,
+];
+
+const EXPIRED_STATUSES = [
+  BuybackRequestStatus.PreAuthOfferExpired,
+  BuybackRequestStatus.PostAuthOfferExpired,
+];
+
+interface BuybackDetailsStepperProps {
+  currentStatus: BuybackRequestStatus;
+  eventsLog?: BuybackRequestEvent[];
+  dueDate?: string;
+  fundedOn?: string;
+  isPaidOut?: boolean;
+  paidData?: string;
+  isClosed?: boolean;
+  isUnsettled?: boolean;
+  closeData?: string;
+}
+
+export const BuybackDetailsStepper = ({
+  currentStatus,
+  eventsLog,
+  dueDate,
+  fundedOn,
+  isClosed,
+  isUnsettled,
+  isPaidOut,
+  paidData,
+  closeData,
+}: BuybackDetailsStepperProps) => {
+  const activeStep = useMemo(() => {
+    if (isClosed || isUnsettled || isPaidOut) return 6;
+    const step = STEPS.find((s) => s.statuses.includes(currentStatus));
+    return step ? step.id : 1;
+  }, [currentStatus, isClosed, isUnsettled, isPaidOut]);
+
+  const isRejected = REJECTED_STATUSES.includes(currentStatus);
+  const currentStepData = STEPS.find((s) => s.id === activeStep) || STEPS[0];
+
+  const getTimestampForStep = (stepId: number) => {
+    if (!eventsLog) return null;
+    const stepDef = STEPS.find((s) => s.id === stepId);
+    if (!stepDef) return null;
+
+    const relevantLogs = eventsLog
+      .filter((log) =>
+        stepDef.statuses.includes(log.status as BuybackRequestStatus)
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+
+    return relevantLogs[0]?.timestamp || null;
+  };
+
+  const getStepColor = (stepId: number) => {
+    if ((isClosed || isPaidOut) && stepId <= activeStep) return "bg-[#047857]";
+
+    if (isUnsettled) {
+      if (stepId < activeStep) return "bg-[#047857]";
+      if (stepId === activeStep) return "bg-[#B91C1C]";
+      return "bg-[#a8a29e]";
+    }
+
+    if (stepId < activeStep) return "bg-[#047857]";
+    if (stepId === activeStep) {
+      if (isRejected) return "bg-[#B91C1C]";
+      return "bg-[#00158A]";
+    }
+    return "bg-[#a8a29e]";
+  };
+
+  const getActiveStepText = () => {
+    if (isUnsettled) {
+      return dueDate ? `Expired: ${formatDate(dueDate)}` : "Expired";
+    }
+
+    if (isRejected) {
+      const rejectedTimestamp = getTimestampForStep(activeStep);
+      const isExpired = EXPIRED_STATUSES.includes(currentStatus);
+      const label = isExpired ? "Offer Expired" : "Item Declined";
+      if (rejectedTimestamp)
+        return `${label}: ${formatDate(rejectedTimestamp)}`;
+      return label;
+    }
+
+    if (activeStep === 1) {
+      const stepTimestamp = getTimestampForStep(1);
+      if (stepTimestamp) return `Submitted: ${formatDate(stepTimestamp)}`;
+    }
+
+    if (activeStep === 2) return "Reply soon: 48 hours left";
+
+    if (activeStep === 3) {
+      const acceptEvent = eventsLog?.find(
+        (e) => e.status === BuybackRequestStatus.PreAuthOfferAccepted
+      );
+      if (acceptEvent) {
+        const deadline = new Date(acceptEvent.timestamp);
+        deadline.setDate(deadline.getDate() + 2);
+        return `Submit by: ${formatDate(deadline)}`;
+      }
+      return "Preparation for shipment";
+    }
+
+    if (activeStep === 4) {
+      if (currentStatus === BuybackRequestStatus.FinalOfferSent)
+        return "Reply soon: 48 hours left";
+      const received = eventsLog?.find(
+        (e) => e.status === BuybackRequestStatus.AssetReceived
+      );
+      if (received) return `Received: ${formatDate(received.timestamp)}`;
+      return "Processing item...";
+    }
+
+    if (activeStep === 5) {
+      if (currentStatus === BuybackRequestStatus.TransactionPending) {
+        return "Transaction Pending";
+      }
+
+      return fundedOn
+        ? `Funded: ${formatDate(fundedOn)}`
+        : "Processing payment...";
+    }
+
+    if (activeStep === 6) {
+      if (isClosed && closeData) {
+        return `Closed: ${formatDate(closeData)}`;
+      }
+
+      if (isPaidOut && paidData) {
+        return `Paid back: ${formatDate(paidData)}`;
+      }
+
+      if (currentStatus === BuybackRequestStatus.FinalOfferAccepted) {
+        return dueDate
+          ? `Buyback expires: ${formatDate(dueDate)}`
+          : "Payment pending";
+      }
+      return "Completed";
+    }
+
+    return "";
+  };
+
+  const statusText = getActiveStepText();
+
+  return (
+    <div className="w-full font-new-sans lg:bg-transparent">
+      {/* MOBILE VIEW */}
+      <div className="lg:hidden">
+        <Accordion className="w-full border-none" collapsible type="single">
+          <AccordionItem className="border-none" value="steps">
+            <div className="flex items-center justify-between gap-8">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm">
+                    {currentStepData.label}
+                  </span>
+                </div>
+                <div className="h-[3px] w-full bg-gray-200">
+                  <div
+                    className={`h-full transition-all duration-500 ${getStepColor(activeStep)}`}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                <p className="font-normal text-xs">{statusText}</p>
+              </div>
+              <AccordionTrigger className="flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background p-0 hover:no-underline [&>svg]:h-4 [&>svg]:w-4" />
+            </div>
+
+            <AccordionContent className="px-2 pb-0">
+              <div className="flex flex-col gap-4 pt-6">
+                {STEPS.map((step) => {
+                  const isActive = step.id === activeStep;
+                  const isCompleted = step.id < activeStep;
+                  const stepDate = getTimestampForStep(step.id);
+
+                  let mobileSubText = "";
+
+                  if (step.id === 5 && (isActive || isCompleted) && fundedOn) {
+                    mobileSubText = `Funded: ${formatDate(fundedOn)}`;
+                  } else if (step.id === 6 && isClosed && closeData) {
+                    mobileSubText = `Paid back: ${formatDate(closeData)}`;
+                  } else if (stepDate) {
+                    if (step.id === 1)
+                      mobileSubText = `Reviewed: ${formatDate(stepDate)}`;
+                    else if (isCompleted)
+                      mobileSubText = `Completed: ${formatDate(stepDate)}`;
+                  }
+
+                  return (
+                    <div
+                      className="flex h-10 items-center gap-4 border-border border-b-[0.5px] last:border-none"
+                      key={step.id}
+                    >
+                      <div
+                        className={`h-2 w-2 rounded-full ${getStepColor(step.id)}`}
+                      />
+                      <div className="flex flex-col leading-[120%]">
+                        <span
+                          className={`text-xs ${isActive ? "font-semibold" : isCompleted ? "text-[#44403c]" : "text-[#a8a29e]"} ${isActive && isRejected ? "text-[#B91C1C]" : ""}`}
+                        >
+                          {step.label}
+                        </span>
+                        {mobileSubText && (
+                          <span className="text-[10px] text-gray-400">
+                            {mobileSubText}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </div>
+
+      {/* DESKTOP VIEW */}
+      <div className="hidden w-full grid-cols-6 gap-4 pb-4 lg:grid">
+        {STEPS.map((step) => {
+          const isCompleted = step.id < activeStep;
+          const isActive = step.id === activeStep;
+          const stepDate = getTimestampForStep(step.id);
+
+          let desktopSubText = "";
+          if (isActive) {
+            desktopSubText = statusText;
+          } else if (isCompleted) {
+            if (step.id === 5 && fundedOn) {
+              desktopSubText = `Funded: ${formatDate(fundedOn)}`;
+            } else if (stepDate) {
+              desktopSubText =
+                step.id === 1
+                  ? `Reviewed: ${formatDate(stepDate)}`
+                  : `Completed: ${formatDate(stepDate)}`;
+            }
+          }
+
+          return (
+            <div className="flex flex-col gap-1.5" key={step.id}>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`font-semibold text-xs tracking-tight ${isActive || isCompleted ? "text-[#44403c]" : "text-[#a8a29e]"}`}
+                >
+                  {step.label}
+                </span>
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-transparent">
+                <div
+                  className={`h-full transition-all duration-500 ${getStepColor(step.id)}`}
+                  style={{ width: "100%" }}
+                />
+              </div>
+              {desktopSubText && (
+                <p className="font-medium text-[10px]">{desktopSubText}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};

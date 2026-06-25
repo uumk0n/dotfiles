@@ -1,0 +1,42 @@
+/**
+ * Validates a Tron (TRC-20) wallet address.
+ *
+ * Tron address format:
+ * - Starts with 'T'
+ * - Exactly 34 characters long
+ * - Base58 encoded (alphanumeric, no 0, O, I, l)
+ *
+ * @param address The Tron address to validate
+ * @returns true if valid, false otherwise
+ */
+export function isValidTronAddress(address: string): boolean {
+  if (!address || typeof address !== 'string') {
+    return false;
+  }
+
+  // Must start with 'T'
+  if (!address.startsWith('T')) {
+    return false;
+  }
+
+  // Must be exactly 34 characters
+  if (address.length !== 34) {
+    return false;
+  }
+
+  // Base58 character set (excludes 0, O, I, l to avoid confusion)
+  const base58Regex =
+    /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
+
+  return base58Regex.test(address);
+}
+
+/**
+ * Normalizes a Tron address by trimming whitespace.
+ *
+ * @param address The Tron address to normalize
+ * @returns Normalized address
+ */
+export function normalizeTronAddress(address: string): string {
+  return address.trim();
+}

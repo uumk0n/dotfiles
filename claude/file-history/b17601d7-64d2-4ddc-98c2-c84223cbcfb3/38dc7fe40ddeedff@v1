@@ -1,0 +1,237 @@
+import type { NextAuthOptions, User } from "next-auth";
+import type { JWT } from "next-auth/jwt";
+import CredentialsProvider from "next-auth/providers/credentials";
+
+import { oauthGoogle, signIn } from "@/entities/auth/api/services";
+import { getProfileWithToken } from "@/entities/profile/api/services";
+import { calculateExpiresIn } from "@/shared/lib/auth";
+import type { RefreshTokenResponse } from "@/shared/types/auth.types";
+
+import { API_ROUTES } from "./api-routes";
+import { APP_ROUTES } from "./app-routes";
+import { ENV } from "./env";
+
+const AUTH_TOKEN_LIFETIME_TO_REFRESH = 60;
+const REFRESH_TOKEN_EXPIRATION_TIME = 24 * 60 * 60 * 1000;
+
+export const authConfig: NextAuthOptions = {
+  secret: ENV.NEXTAUTH_SECRET,
+  providers: [
+    CredentialsProvider({
+      id: "credentials",
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      authorize: async (credentials): Promise<null | User> => {
+        if (!(credentials?.email && credentials?.password)) return null;
+
+        try {
+          const response = await signIn({
+            email: credentials.email,
+            password: credentials.password,
+          });
+
+          if (
+            response.status === "CHALLENGE" &&
+            response.challengeName === "NEW_PASSWORD_REQUIRED"
+          ) {
+            return {
+              id: "",
+              email: credentials.email,
+              accessToken: "",
+              refreshToken: "",
+              idToken: "",
+              isTemporaryPassword: true,
+              tempPasswordSession: response.session,
+            };
+          }
+
+          if (response.status === "SUCCESS") {
+            const { payload } = response;
+
+            const profile = await getProfileWithToken(payload.accessToken);
+
+            return {
+              id: profile.id,
+              email: profile.email,
+              accessToken: payload.accessToken,
+              refreshToken: payload.refreshToken,
+              idToken: payload.idToken,
+              refreshTokenExpiresAt: Date.now() + REFRESH_TOKEN_EXPIRATION_TIME,
+              profile,
+            };
+          }
+
+          console.error("Error signing in:", response);
+
+          return null;
+        } catch (e) {
+          console.error("Error signing in:", e);
+          return null;
+        }
+      },
+    }),
+    CredentialsProvider({
+      id: "google-oauth",
+      name: "Google",
+      credentials: {
+        idToken: { label: "ID Token", type: "text" },
+      },
+      authorize: async (credentials): Promise<null | User> => {
+        if (!credentials?.idToken) return null;
+
+        try {
+          const response = await oauthGoogle({ idToken: credentials.idToken });
+
+          if (response.status === "SUCCESS") {
+            const { payload } = response;
+
+            // Decode Google id_token to get basic user info as fallback
+            const googlePayload = JSON.parse(
+              Buffer.from(
+                credentials.idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"),
+                "base64",
+              ).toString(),
+            ) as { sub?: string; email?: string };
+
+            let profile;
+            try {
+              profile = await getProfileWithToken(payload.accessToken);
+              console.log("[Google OAuth] profile fetched:", profile?.id, profile?.roles);
+            } catch (profileError) {
+              console.error("[Google OAuth] getProfileWithToken failed:", profileError);
+            }
+
+            return {
+              id: profile?.id ?? googlePayload.sub ?? "",
+              email: profile?.email ?? googlePayload.email ?? "",
+              accessToken: payload.accessToken,
+              refreshToken: payload.refreshToken,
+              idToken: payload.idToken || "",
+              refreshTokenExpiresAt: Date.now() + REFRESH_TOKEN_EXPIRATION_TIME,
+              profile,
+            };
+          }
+
+          return null;
+        } catch (error) {
+          console.error("Google OAuth error:", error);
+          return null;
+        }
+      },
+    }),
+  ],
+
+  callbacks: {
+    async jwt({ token, user, account, trigger, session }): Promise<JWT> {
+      const isManualUpdate = trigger === "update" && session;
+
+      if (isManualUpdate) {
+        return {
+          ...token,
+          ...session,
+        };
+      }
+
+      if (account && user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.accessToken = user.accessToken;
+        token.refreshToken = user.refreshToken;
+        token.idToken = user.idToken;
+        token.refreshTokenExpiresAt = user.refreshTokenExpiresAt;
+        token.session = user.session;
+        token.profile = user.profile;
+        token.isTemporaryPassword = user.isTemporaryPassword;
+        token.tempPasswordSession = user.tempPasswordSession;
+        token.provider = account.provider;
+      }
+
+      const expiresIn = calculateExpiresIn(token.accessToken);
+
+      if (expiresIn < AUTH_TOKEN_LIFETIME_TO_REFRESH && token.refreshToken) {
+        const newAccessToken = await refreshAccessToken(
+          token.refreshToken,
+          token.accessToken,
+        );
+
+        if (newAccessToken) {
+          token.accessToken = newAccessToken.accessToken;
+          token.refreshToken = newAccessToken.refreshToken;
+          token.idToken = newAccessToken.idToken;
+        }
+      }
+
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (token) {
+        session.accessToken = token.accessToken;
+        session.refreshToken = token.refreshToken;
+        session.idToken = token.idToken;
+        session.refreshTokenExpiresAt = token.refreshTokenExpiresAt;
+        session.session = token.session;
+        session.isTemporaryPassword = token.isTemporaryPassword;
+        session.tempPasswordSession = token.tempPasswordSession;
+        session.provider = token.provider;
+        session.user = {
+          id: token.id,
+          email: token.email,
+          profile: token.profile,
+        };
+      }
+
+      return session;
+    },
+
+    async signIn() {
+      return true;
+    },
+  },
+
+  pages: {
+    signIn: APP_ROUTES.AUTH.SIGN_IN,
+  },
+
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60,
+  },
+};
+
+async function refreshAccessToken(
+  refreshTokenValue: string,
+  accessTokenValue: string,
+) {
+  try {
+    const url = `${ENV.NEXT_PUBLIC_APP_API_URL}${API_ROUTES.AUTH.REFRESH_TOKEN}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        refreshToken: refreshTokenValue,
+        accessToken: accessTokenValue,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to refresh access token");
+    }
+
+    const result = (await response.json()) as RefreshTokenResponse;
+
+    return {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      idToken: result.idToken,
+    };
+  } catch (error) {
+    console.error("Failed to refresh access token:", error);
+    return null;
+  }
+}

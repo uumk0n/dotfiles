@@ -1,0 +1,1400 @@
+"use client";
+
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/shared/ui/accordion";
+import { CategoriesCarousel } from "@/shared/ui/categories-carousel";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Separator } from "@/shared/ui/shadcn/separator";
+import { TestimonialHighlightSection } from "@/shared/ui/testimonial-highlight-section";
+import type { DotLottie } from "@lottiefiles/dotlottie-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import {
+  AnimatePresence,
+  motion,
+  useScroll,
+  useTransform,
+  type Variants,
+} from "framer-motion";
+import {
+  CircleCheckIcon,
+  Lock,
+  Package,
+  ShieldCheck,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import { useSession } from "next-auth/react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  LANDING_AUTH_FEATURES,
+  LANDING_BRAND_LOGOS,
+  LANDING_FAQ,
+  LANDING_STEPS,
+} from "../model/constants";
+
+// ---------------------------------------------------------------------------
+// Animation variants
+// ---------------------------------------------------------------------------
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 48 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
+const fadeIn: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { duration: 0.6, ease: "easeOut" },
+  },
+};
+
+const slideLeft: Variants = {
+  hidden: { opacity: 0, x: -60 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
+const slideRight: Variants = {
+  hidden: { opacity: 0, x: 60 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
+const scaleIn: Variants = {
+  hidden: { opacity: 0, scale: 0.88 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
+const staggerContainer: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } },
+};
+
+const staggerContainerSlow: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.15 } },
+};
+
+const VP = { once: true, margin: "-80px" };
+
+// ---------------------------------------------------------------------------
+// Value props — 5 items for horizontal strip
+// ---------------------------------------------------------------------------
+const VALUE_PROPS = [
+  { id: "ai", label: "AI-Powered Valuation", Icon: Sparkles },
+  { id: "payout", label: "Fast Cash or Crypto Payouts", Icon: Zap },
+  { id: "nocheck", label: "No Credit Check or Paper Work", Icon: ShieldCheck },
+  { id: "insured", label: "Fully-Insured Shipping", Icon: Package },
+  { id: "storage", label: "Secure Storage", Icon: Lock },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Gallery images — 5 photos
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Hero marketing carousel — shows currently valued luxury items (CMS-managed)
+// ---------------------------------------------------------------------------
+
+const HERO_CAROUSEL_ITEMS = [
+  {
+    id: "1",
+    name: "Audemars Piguet Royal Oak Extra-Thin 18K Yellow Gold Watch",
+    price: "AED 365,000",
+    imageSrc: "/new-design-images/marketing-carousel/ap-royal-oak.jpg",
+  },
+  {
+    id: "2",
+    name: 'Rolex Daytona "Panda" 116500LN 40mm Box Papers',
+    price: "AED 123,050",
+    imageSrc: "/new-design-images/marketing-carousel/rolex-daytona-panda.jpg",
+  },
+  {
+    id: "3",
+    name: "Richard Mille RM 035",
+    price: "AED 991,750",
+    imageSrc: "/new-design-images/marketing-carousel/richard-mille-rm035.jpg",
+  },
+] as const;
+
+function HeroMarketingCarousel() {
+  const [activeSlide, setActiveSlide] = useState(0);
+  const totalSlides = HERO_CAROUSEL_ITEMS.length;
+
+  // Adding activeSlide to deps resets the 4-second timer whenever the slide
+  // changes — both automatically and on manual dot click.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % totalSlides);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activeSlide, totalSlides]);
+
+  const currentItem = HERO_CAROUSEL_ITEMS[activeSlide];
+
+  return (
+    <Link
+      className="flex items-stretch gap-5 overflow-clip transition-opacity hover:opacity-90"
+      href={APP_ROUTES.BUYBACK_REQUESTS.CREATE}
+    >
+      {/* Square image — 152×152 */}
+      <div className="relative h-[152px] w-[152px] shrink-0 overflow-hidden rounded-[4px]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentItem.id}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0"
+            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
+          >
+            <Image
+              alt={currentItem.name}
+              className="object-cover"
+              fill
+              sizes="152px"
+              src={currentItem.imageSrc}
+            />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Text */}
+      <div className="flex w-[278px] flex-col justify-between overflow-hidden">
+        {/* Top group: label + progress bars */}
+        <div className="flex flex-col">
+          <p className="font-new-sans text-[#F5F3EF] text-sm italic">
+            Recently Quoted
+          </p>
+
+          {/* Progress bars — 1px track with animated fill */}
+          <div className="flex items-center gap-1.5 pt-2">
+            {HERO_CAROUSEL_ITEMS.map((item, index) => (
+              <div
+                aria-label={`Go to slide ${index + 1}`}
+                className="relative h-[2px] flex-1 cursor-pointer overflow-hidden bg-[rgba(214,211,209,0.4)]"
+                key={`hero-dot-${item.id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  setActiveSlide(index);
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                {/* Past slides: instantly full */}
+                {index < activeSlide && (
+                  <div className="absolute inset-0 bg-[#F5F3EF]" />
+                )}
+                {/* Active: scaleX animates 0 → 1 over 4 s (transform is GPU-accelerated, works in Safari) */}
+                {index === activeSlide && (
+                  <motion.div
+                    animate={{ scaleX: 1 }}
+                    className="absolute inset-0 origin-left bg-[#F5F3EF]"
+                    initial={{ scaleX: 0 }}
+                    key={`progress-${activeSlide}`}
+                    transition={{ duration: 4, ease: "linear" }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`hero-text-${currentItem.id}`}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col gap-0.5"
+            exit={{ opacity: 0, y: -4 }}
+            initial={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            {/* Fixed 48px height (2 lines × 16px × 1.5lh) — prevents layout shift */}
+            <p className="h-[48px] overflow-hidden font-medium font-new-sans text-[#F5F3EF] text-base leading-normal">
+              {currentItem.name}
+            </p>
+            <p className="font-extralight font-new-serif text-2xl text-[#F5F3EF] leading-[1.2]">
+              {currentItem.price}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero headline — word-by-word reveal
+// ---------------------------------------------------------------------------
+function AnimatedHeadline({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  const words = text.split(" ");
+  return (
+    <motion.h1
+      animate="visible"
+      className={className}
+      initial="hidden"
+      variants={staggerContainer}
+    >
+      {words.map((word, idx) => (
+        <motion.span
+          // eslint-disable-next-line react/no-array-index-key
+          className="inline-block"
+          key={`word-${idx}`}
+          variants={{
+            hidden: { opacity: 0, y: 40, rotateX: -15 },
+            visible: {
+              opacity: 1,
+              y: 0,
+              rotateX: 0,
+              transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+            },
+          }}
+        >
+          {word}
+          {idx < words.length - 1 ? "\u00A0" : ""}
+        </motion.span>
+      ))}
+    </motion.h1>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Steps section — Lottie + synced progress bars
+// ---------------------------------------------------------------------------
+function StepsSection() {
+  const router = useRouter();
+  const [activeStep, setActiveStep] = useState(0);
+  const [liveProgress, setLiveProgress] = useState(0);
+  const activeStepRef = useRef(0);
+
+  const handleDotLottieRef = useCallback((dl: DotLottie | null) => {
+    if (!dl) return;
+
+    dl.addEventListener("frame", () => {
+      if (dl.totalFrames > 0) {
+        setLiveProgress(dl.currentFrame / dl.totalFrames);
+      }
+    });
+
+    dl.addEventListener("complete", () => {
+      const next = (activeStepRef.current + 1) % 4;
+      activeStepRef.current = next;
+      setActiveStep(next);
+      setLiveProgress(0);
+    });
+  }, []);
+
+  return (
+    <section className="overflow-hidden bg-background">
+      <div className="flex flex-col min-[1172px]:flex-row min-[1172px]:items-stretch">
+        {/* Left — dark damask panel with iPhone */}
+        <div className="relative flex items-center justify-center overflow-hidden bg-[#020A3A] px-6 py-16 min-[1172px]:w-[50%] min-[1172px]:shrink-0 min-[1172px]:py-24">
+          {/* Damask background image */}
+          <Image
+            alt="Steps background"
+            aria-hidden="true"
+            className="pointer-events-none object-cover opacity-60"
+            fill
+            sizes="50vw"
+            src="/new-design-images/steps-bg.webp"
+          />
+          {/* Lottie inside iPhone mockup */}
+          <motion.div
+            className="relative z-10"
+            initial="hidden"
+            variants={slideLeft}
+            viewport={VP}
+            whileInView="visible"
+          >
+            <div
+              className="relative w-[240px] min-[1172px]:w-[320px]"
+              style={{ aspectRatio: "740 / 1500" }}
+            >
+              {/* Lottie clipped to screen — overflow-hidden + rounded clips corners & background */}
+              <div className="absolute inset-[2%_4%] overflow-hidden rounded-[12%]">
+                <DotLottieReact
+                  autoplay
+                  dotLottieRefCallback={handleDotLottieRef}
+                  key={activeStep}
+                  loop={false}
+                  src={`/lottie/Scene-${activeStep + 1}.lottie`}
+                  style={{ width: "100%", height: "100%" }}
+                />
+              </div>
+              {/* iPhone frame on top */}
+              <Image
+                alt="LuxFlow mobile app"
+                className="pointer-events-none z-10 object-contain"
+                fill
+                sizes="320px"
+                src="/new-design-images/iphone-mockup.png"
+              />
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Right — steps list */}
+        <div className="flex flex-1 flex-col gap-8 bg-[#F5F3EF] px-10 py-16">
+          <motion.h2
+            className="font-extralight font-new-serif text-3xl leading-[1.2] min-[1172px]:text-[44px]"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={VP}
+            whileInView="visible"
+          >
+            Get Instant Cash
+            <br />
+            in 4 Simple Steps
+          </motion.h2>
+
+          <div className="flex flex-col">
+            {LANDING_STEPS.map((step, index) => {
+              let barWidth = "0%";
+              if (index < activeStep) {
+                barWidth = "100%";
+              } else if (index === activeStep) {
+                barWidth = `${liveProgress * 100}%`;
+              }
+
+              return (
+                <motion.div
+                  className="flex flex-col gap-3 border-[#D6D3D1] border-t py-5 first:border-t-0 first:pt-0"
+                  initial="hidden"
+                  key={step.number}
+                  transition={{ delay: index * 0.08 }}
+                  variants={fadeUp}
+                  viewport={VP}
+                  whileInView="visible"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <h3
+                      className={
+                        "font-extralight font-new-serif text-[24px] leading-[1.2] transition-colors min-[1172px]:text-[30px]"
+                      }
+                    >
+                      {index + 1}. {step.title}
+                    </h3>
+                  </div>
+                  <p className="font-new-sans text-sm leading-relaxed">
+                    {step.description}
+                  </p>
+                  {/* Progress bar — driven by Lottie frame*/}
+                  <div className="relative h-[2px] w-full overflow-hidden bg-[#D6D3D1]">
+                    <div
+                      className="absolute inset-y-0 left-0 bg-[#001A8C] transition-none"
+                      style={{ width: barWidth }}
+                    />
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <motion.div
+            className="w-fit"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={VP}
+            whileHover={{ scale: 1.03 }}
+            whileInView="visible"
+            whileTap={{ scale: 0.97 }}
+          >
+            <Button
+              className="rounded-sm"
+              onClick={() => {
+                router.push(APP_ROUTES.BUYBACK_REQUESTS.CREATE);
+              }}
+            >
+              Start with a Quote
+              <span aria-hidden="true">→</span>
+            </Button>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const LANDING_TRUST_FEATURES = [
+  {
+    title: "Discreet and Private",
+    description: "Transactions are 100% confidential. No public offers.",
+  },
+  {
+    title: "Fast AI-Driven. Expert-Led Valuation",
+    description:
+      "We use both manual inspection and AI-driven tech, including devices like Entrupy, to verify material, craftsmanship, serials, and more; for an accurate final offer.",
+  },
+  {
+    title: "Insured Custody & Delivery",
+    description:
+      "We partner with Brink's to deliver fully insured pickup, plus insured high-security vaults managed to storage and protect your values.",
+  },
+  {
+    title: "Same-Day Payout",
+    description: "Get paid via bank deposits, PayPal, or stablecoins.",
+  },
+];
+
+export default function TrustSection() {
+  return (
+    <section className="relative flex min-h-[858px] w-full items-center justify-center overflow-hidden bg-[#0A0A0B] py-20 text-background">
+      {/* Background Video & Overlay */}
+      <div className="absolute inset-0 z-0">
+        <video
+          autoPlay
+          className="h-full w-full object-cover opacity-40"
+          loop
+          muted
+          playsInline
+        >
+          <source src="/new-design-videos/bluebg.mp4" type="video/mp4" />
+        </video>
+        {/* Мягкий градиент для глубины как на скрине */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-[#0A0A0B]/80" />
+      </div>
+
+      <div className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 hidden h-[120%] w-[1px] bg-background md:block" />
+
+      <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6">
+        <div className="grid min-h-[560px] grid-cols-1 gap-16 md:grid-cols-2 md:gap-0">
+          {/* ЛЕВАЯ КОЛОНКА */}
+          <motion.div
+            className="flex max-w-[500px] flex-col justify-center"
+            initial={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.8 }}
+            whileInView={{ opacity: 1, x: 0 }}
+          >
+            <div className="mb-8 flex items-center gap-2">
+              <span className="font-new-sans text-base tracking-[-1%]">
+                In partnership with
+              </span>
+              <div className="relative h-[18px] w-[102px]">
+                <Image
+                  alt="Brinks Logo"
+                  className="object-contain"
+                  fill
+                  src={"/new-design-images/brinks-logo.svg"}
+                />
+              </div>
+            </div>
+
+            <h2 className="mb-10 w-full font-extralight font-new-serif text-3xl text-background leading-[120%] tracking-[0]">
+              From secure storage by Brink's to verified authenticity checks,
+              every item on our platform is safeguarded through world-class
+              security measures, ensuring peace of mind for both Sellers and
+              Buyers.
+            </h2>
+
+            <Link
+              className="group flex w-fit items-center gap-4 border border-white/40 px-6 py-3 text-sm transition-all hover:bg-white hover:text-black"
+              href={APP_ROUTES.BUYBACK_REQUESTS.CREATE}
+            >
+              Start with a Quote
+              <span className="transition-transform group-hover:translate-x-1">
+                →
+              </span>
+            </Link>
+          </motion.div>
+
+          {/* ПРАВАЯ КОЛОНКА С ЛИНИЕЙ */}
+          <div className="relative flex flex-col justify-between pl-0 md:pl-20">
+            {LANDING_TRUST_FEATURES.map((feature, idx) => {
+              const Icon = `/new-design-images/icons/trust-section/trust-icon-${idx + 1}.svg`;
+
+              return (
+                <motion.div
+                  className="group flex items-start gap-5"
+                  initial={{ opacity: 0, y: 20 }}
+                  key={idx}
+                  transition={{ delay: idx * 0.1 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                >
+                  <div className="relative mt-1 h-10 w-10">
+                    <Image
+                      alt={`Trust Icon ${idx + 1}`}
+                      height={40}
+                      src={Icon}
+                      width={40}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <h3 className="font-light font-new-serif text-[22px] text-white/90 lg:text-[26px]">
+                      {feature.title}
+                    </h3>
+                    <p className="max-w-md text-sm text-white/50 leading-relaxed">
+                      {feature.description}
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+export function LandingPage() {
+  const { status } = useSession();
+  const isAuthenticated = status === "authenticated";
+
+  // Parallax + crossfade for hero
+  const combinedRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: combinedRef,
+    offset: ["start start", "end end"],
+  });
+  const videoOpacity = useTransform(scrollYProgress, [0, 0.4], [0.5, 0]);
+  const imageOpacity = useTransform(scrollYProgress, [0.3, 0.7], [0, 1]);
+  const videoY = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
+
+  const section2Ref = useRef<HTMLElement>(null);
+
+  return (
+    <div className="new-design flex flex-col">
+      {/* ================= DARK ZONE (Section 1 & 2) ================= */}
+      <div className="relative" ref={combinedRef}>
+        <div className="pointer-events-none sticky top-0 h-screen w-full overflow-hidden bg-[#02061C]">
+          {/* Parallax background video */}
+          <motion.div
+            className="absolute inset-0 z-0"
+            style={{ opacity: videoOpacity, y: videoY }}
+          >
+            <video
+              autoPlay
+              className="h-full w-full object-cover"
+              loop
+              muted
+              playsInline
+            >
+              <source
+                src="/new-design-videos/landing-hero-bg.mp4"
+                type="video/mp4"
+              />
+            </video>
+            <div className="absolute inset-0 bg-gradient-to-b from-[#02061C]/50 via-transparent to-[#02061C]/80" />
+          </motion.div>
+          {/* Scroll-linked crossfade */}
+          <motion.div
+            aria-hidden="true"
+            className="absolute inset-0 z-10"
+            style={{ opacity: imageOpacity }}
+          >
+            <Image
+              alt=""
+              className="object-cover object-center"
+              fill
+              priority
+              sizes="100vw"
+              src="/new-design-images/blue-background.avif"
+            />
+          </motion.div>
+        </div>
+        <div className="-mt-[100vh] relative z-30">
+          {/* 1. HERO */}
+          <section className="relative flex min-h-[100svh] flex-col justify-center px-4 py-20">
+            <div className="mx-auto flex min-w-[1172px] max-w-[1172px] flex-1 flex-col justify-center gap-2 max-md:min-w-full">
+              <AnimatedHeadline
+                className="font-extralight font-new-serif text-[#F5F3EF] text-[42px] leading-[90%] tracking-tight xl:text-[132px] 2xl:text-[174px] min-[768px]:text-[80px]"
+                text="Unlock instant"
+              />
+              {/* Line 2: "liquidity" + divider + italic subtitle (inline on desktop) */}
+              <motion.div
+                animate="visible"
+                className="flex items-center justify-between max-md:items-baseline"
+                initial="hidden"
+                variants={staggerContainer}
+              >
+                <motion.span
+                  className="whitespace-nowrap font-extralight font-new-serif text-[#F5F3EF] text-[52px] leading-[90%] tracking-tight xl:text-[132px] 2xl:text-[174px] min-[768px]:text-[80px]"
+                  variants={{
+                    hidden: { opacity: 0, y: 40, rotateX: -15 },
+                    visible: {
+                      opacity: 1,
+                      y: 0,
+                      rotateX: 0,
+                      transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+                    },
+                  }}
+                >
+                  liquidity
+                </motion.span>
+                <motion.div
+                  className="mx-auto flex items-center justify-between gap-12 max-md:hidden"
+                  style={{ paddingTop: "26px" }}
+                  variants={fadeIn}
+                >
+                  <div className="h-px w-[167px] bg-white/40" />
+                  <p className="whitespace-nowrap font-extralight font-new-serif text-[#F5F3EF] text-[40px] italic leading-[1.1] max-md:text-[32px]">
+                    from your luxury items
+                  </p>
+                </motion.div>
+              </motion.div>
+            </div>
+
+            {/* Bottom row — layout differs for auth vs non-auth */}
+            {isAuthenticated ? (
+              <div className="relative px-4">
+                <div className="mx-auto flex max-w-[1720px] justify-between gap-8 max-md:flex-col lg:px-10">
+                  {/* Left */}
+                  <motion.div
+                    animate="visible"
+                    className="flex max-w-lg flex-col gap-6"
+                    initial="hidden"
+                    transition={{ delay: 0.5 }}
+                    variants={fadeUp}
+                  >
+                    <p className="max-w-[450px] font-new-sans text-[#F5F3EF]/70 text-base leading-relaxed">
+                      LuxFlow ensures a discreet, transparent, and trustworthy
+                      experience to get fast liquidity on your luxury watches,
+                      designer handbags, or other high-value items.
+                    </p>
+
+                    <motion.div
+                      className="w-fit"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      <Link
+                        className="group inline-flex h-12 items-center gap-2 rounded-[4px] border border-white/70 px-8 font-medium font-new-sans text-[#F5F3EF] text-sm transition-colors hover:bg-white/10"
+                        href={APP_ROUTES.BUYBACK_REQUESTS.CREATE}
+                      >
+                        Start with a Quote
+                        <span
+                          aria-hidden="true"
+                          className="transition-transform duration-200 group-hover:translate-x-1"
+                        >
+                          →
+                        </span>
+                      </Link>
+                    </motion.div>
+                  </motion.div>
+
+                  {/* Right: marketing carousel — currently valued items */}
+                  <motion.div
+                    animate="visible"
+                    className="flex items-end justify-end"
+                    initial="hidden"
+                    transition={{ delay: 0.4 }}
+                    variants={fadeIn}
+                  >
+                    <motion.div
+                      animate="visible"
+                      className="animate-float"
+                      initial="hidden"
+                      transition={{ delay: 0.3 }}
+                      variants={slideRight}
+                    >
+                      <HeroMarketingCarousel />
+                    </motion.div>
+                  </motion.div>
+                </div>
+              </div>
+            ) : (
+              <HeroPreLoginCallout />
+            )}
+          </section>
+
+          {/* 2. DESCRIPTION — section.png fades in over hero video color as section enters view */}
+          <section className="relative flex min-h-screen flex-col">
+            <div className="flex min-h-[910px] flex-1 items-center justify-center">
+              <div className="px-6">
+                <motion.p
+                  className="mx-auto max-w-[645px] text-center font-extralight font-new-serif text-[#F5F3EF] text-[28px] leading-[1.1] min-[1172px]:text-[48px] min-[768px]:text-[36px]"
+                  initial="hidden"
+                  variants={fadeUp}
+                  viewport={VP}
+                  whileInView="visible"
+                >
+                  LuxFlow combines speed, security, and sophistication. With
+                  Brink&apos;s handling item custody, and a multi-layered
+                  authentication process that combines AI and trusted experts.
+                </motion.p>
+              </div>
+            </div>
+
+            <div className="w-full border-y-[0.5px] text-background">
+              <motion.div
+                className="mx-auto flex max-w-[1720px] flex-wrap"
+                initial="hidden"
+                variants={staggerContainer}
+                viewport={VP}
+                whileInView="visible"
+              >
+                {VALUE_PROPS.map(({ id, label, Icon }) => (
+                  <motion.div
+                    className="mx-auto flex w-1/2 flex-col items-center gap-6 px-6 py-10 text-center lg:max-w-[140px] lg:flex-1"
+                    key={id}
+                    variants={fadeIn}
+                  >
+                    <Icon className="shrink-0" size={28} strokeWidth={1} />
+                    <span className="font-new-sans font-normal text-sm leading-[150%] tracking-[-1%]">
+                      {label}
+                    </span>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </div>
+
+            <div className="relative z-10 mx-auto my-20 max-w-[1720px] flex-col justify-between pb-24 max-md:px-6">
+              <div className="mx-auto flex flex-col gap-16">
+                {/* 3-column gallery */}
+                <WatchSliderGallery />
+
+                {/* ======================================================================================= */}
+
+                {/* Liquid Luxury Titles */}
+                <div className="flex flex-col items-center gap-2 pt-10 text-center">
+                  <motion.h2
+                    className="font-extralight font-new-serif text-[#F5F3EF] text-[40px] leading-[1.1] min-[1172px]:text-[58px]"
+                    variants={fadeUp}
+                    whileInView="visible"
+                  >
+                    Liquid Luxury
+                  </motion.h2>
+                  <motion.p
+                    className="font-extralight font-new-serif text-[#F5F3EF] text-[32px] leading-[1.1] min-[1172px]:text-[58px]"
+                    variants={fadeUp}
+                    whileInView="visible"
+                  >
+                    Fast. Discreet. Hassle-free.
+                  </motion.p>
+                  <motion.div variants={fadeUp} whileInView="visible">
+                    <span className="mt-4 inline-flex items-center gap-3 rounded-full border border-white/30 px-6 py-3 font-new-sans text-[#F5F3EF]/70 text-sm">
+                      <span className="inline-flex h-4 w-5 overflow-hidden rounded-[2px]">
+                        <span
+                          className="block h-full w-full"
+                          style={{
+                            background:
+                              "linear-gradient(to bottom, #00732f 33.33%, #ffffff 33.33%, #ffffff 66.67%, #ff0000 66.67%)",
+                          }}
+                        />
+                      </span>
+                      Now Available in UAE
+                    </span>
+                  </motion.div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {isAuthenticated ? (
+        <div className="relative z-40">
+          {/* 4. BUYBACK OPTIONS */}
+          <section className="relative flex flex-col" ref={section2Ref}>
+            <motion.div
+              className="pointer-events-none absolute inset-0 z-0"
+              initial={{ opacity: 0 }}
+              style={{
+                backgroundImage:
+                  "url('/new-design-images/create-buyback-bg.webp')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundAttachment: "fixed",
+              }}
+              transition={{ duration: 1.6 }}
+              viewport={{ once: true }}
+              whileInView={{ opacity: 1 }}
+            />
+
+            <div className="relative z-10">
+              <section className="w-full bg-background">
+                <div className="mx-auto max-w-[1720px] flex-col justify-center py-24 max-lg:px-6">
+                  <div className="mx-auto flex w-full max-w-[1240px] flex-col justify-between gap-y-16 lg:flex-row">
+                    {/* Left — Buyback */}
+                    <motion.div
+                      className="flex w-full max-w-[500px] flex-col"
+                      initial="hidden"
+                      variants={slideLeft}
+                      viewport={VP}
+                      whileInView="visible"
+                    >
+                      <motion.div
+                        className="relative mb-6 overflow-hidden rounded-[4px]"
+                        transition={{
+                          type: "spring",
+                          stiffness: 200,
+                          damping: 20,
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                      >
+                        <Image
+                          alt="Buyback option"
+                          className="aspect-[4/3] w-full object-cover lg:min-h-[447px]"
+                          height={447}
+                          src="/new-design-images/option/buyback.webp"
+                          width={640}
+                        />
+                      </motion.div>
+
+                      <div className="flex flex-1 flex-col">
+                        <span className="mb-4 font-new-sans font-semibold text-[12px] uppercase tracking-[3px]">
+                          Sell With Buyback
+                        </span>
+                        <h3 className="mb-4 font-extralight font-new-serif text-3xl leading-[1.2] min-[1172px]:text-4xl">
+                          Keep the option to <br /> buyback your item
+                        </h3>
+                        <p className="mb-8 font-new-sans text-sm leading-relaxed">
+                          Unlock the value of your luxury items with flexibility
+                          and tailored to your needs. Purchase the item back
+                          anytime during the agreed period, or opt for a direct
+                          sale.
+                        </p>
+                        <Link
+                          className="mt-auto inline-flex h-12 w-fit items-center rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-8 font-medium font-new-sans text-base transition-colors hover:bg-[#EDE9E3]"
+                          href={APP_ROUTES.SERVICES.BUYBACK}
+                        >
+                          Learn More
+                        </Link>
+                      </div>
+                    </motion.div>
+
+                    {/* Right — Direct Sale */}
+                    <motion.div
+                      className="flex w-full max-w-[500px] flex-col lg:items-end"
+                      initial="hidden"
+                      variants={slideRight}
+                      viewport={VP}
+                      whileInView="visible"
+                    >
+                      <div className="flex w-full flex-1 flex-col">
+                        <motion.div
+                          className="relative mb-6 overflow-hidden rounded-[4px]"
+                          transition={{
+                            type: "spring",
+                            stiffness: 200,
+                            damping: 20,
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                        >
+                          <Image
+                            alt="Direct sale option"
+                            className="aspect-[4/3] w-full object-cover lg:min-h-[447px]"
+                            height={447}
+                            src="/new-design-images/option/direct-sale.webp"
+                            width={640}
+                          />
+                        </motion.div>
+
+                        <div className="flex flex-1 flex-col">
+                          <span className="mb-4 font-new-sans font-semibold text-[12px] uppercase tracking-[3px]">
+                            Permanent Sale
+                          </span>
+                          <h3 className="mb-4 font-extralight font-new-serif text-3xl leading-[1.2] min-[1172px]:text-4xl">
+                            Convert your items <br /> into capital
+                          </h3>
+                          <p className="mb-8 font-new-sans text-sm leading-relaxed">
+                            <span className="font-bold">Luxflow</span> provides
+                            competitive pricing, verified authentication, and a
+                            rapid payout. No waiting. No uncertainty.
+                          </p>
+                          <Link
+                            className="mt-auto inline-flex h-12 w-fit items-center rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-8 font-medium font-new-sans text-base transition-colors hover:bg-[#EDE9E3]"
+                            href={APP_ROUTES.SERVICES.DIRECT_SALE}
+                          >
+                            Learn More
+                          </Link>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+                <div className="pb-20">
+                  <Separator className="h-[1px] bg-[#D6D3D1]" />
+                </div>
+              </section>
+              {/* 5. STEPS */}
+              <StepsSection />
+              {/* 6. WATCH CAROUSEL + BRAND LOGOS — bg #EDE9E3 */}
+              <CategoriesCarousel />
+              <section className="overflow-hidden border-[#D6D3D1] border-y py-12">
+                <div className="mx-auto max-w-[1720px] px-6 pb-8 min-[1172px]:px-16">
+                  <motion.h2
+                    className="text-center font-extralight font-new-serif text-2xl text-primary min-[1172px]:text-3xl"
+                    initial="hidden"
+                    variants={fadeUp}
+                    viewport={VP}
+                    whileInView="visible"
+                  >
+                    Get an Offer on Exclusive Brands
+                  </motion.h2>
+                </div>
+
+                <div className="flex overflow-hidden">
+                  <motion.div
+                    animate={{ x: ["0%", "-50%"] }}
+                    className="flex shrink-0 gap-4"
+                    style={{ willChange: "transform" }}
+                    transition={{
+                      repeat: Number.POSITIVE_INFINITY,
+                      duration: 30,
+                      ease: "linear",
+                    }}
+                  >
+                    {[...LANDING_BRAND_LOGOS, ...LANDING_BRAND_LOGOS].map(
+                      (brand, idx) => (
+                        <div
+                          className="flex shrink-0 items-center justify-center px-6"
+                          key={idx}
+                        >
+                          <Image
+                            alt={brand.name}
+                            height={brand.h}
+                            src={brand.src}
+                            style={{ mixBlendMode: "multiply" }}
+                            width={brand.w}
+                          />
+                        </div>
+                      )
+                    )}
+                  </motion.div>
+                </div>
+              </section>
+              {/* 7. TESTIMONIAL — card floating over 3-layer wave illustration */}
+              <TestimonialHighlightSection />
+              {/* 8. TRUST SECTION  */}
+              <TrustSection />
+            </div>
+          </section>
+
+          {/* 9. CERTIFIED AUTHENTICATION */}
+          <section className="overflow-hidden">
+            <div className="mx-auto grid min-h-[925px] grid-cols-2 justify-between max-lg:grid-cols-1">
+              {/* Left — text content */}
+              <div className="flex flex-col items-center justify-center bg-[#F5F3EF] py-16">
+                <motion.div
+                  className="relative flex max-w-[500px] flex-col justify-center gap-12"
+                  initial="hidden"
+                  variants={slideLeft}
+                  viewport={VP}
+                  whileInView="visible"
+                >
+                  <h2 className="font-extralight font-new-serif text-3xl leading-[1.1] min-[1172px]:text-[48px]">
+                    Certified Authentication &amp; Valuation with LuxFlow
+                  </h2>
+                  <div className="flex flex-col gap-5">
+                    <p className="font-new-sans text-base leading-relaxed">
+                      At LuxFlow, we understand that authenticity is everything
+                      when it comes to luxury. Whether you&apos;re selling your
+                      item permanently or with a buyback arrangement, our
+                      multi-layered authentication process ensures trust,
+                      transparency, and true market value.
+                    </p>
+
+                    <motion.ul
+                      className="flex flex-col gap-2"
+                      initial="hidden"
+                      variants={staggerContainerSlow}
+                      viewport={VP}
+                      whileInView="visible"
+                    >
+                      {LANDING_AUTH_FEATURES.slice(0, 3).map((feature) => (
+                        <motion.li
+                          className="flex items-center gap-1.5"
+                          key={feature}
+                          variants={fadeUp}
+                        >
+                          <CircleCheckIcon
+                            className="shrink-0 text-primary"
+                            size={16}
+                            strokeWidth={1.5}
+                          />
+                          <span className="font-new-sans text-base leading-[150%] tracking-[-1%]">
+                            {feature}
+                          </span>
+                        </motion.li>
+                      ))}
+                    </motion.ul>
+                  </div>
+                  <div>
+                    <Link
+                      className="inline-flex h-12 items-center rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-8 font-medium font-new-sans text-base transition-colors hover:bg-[#EDE9E3]"
+                      href={APP_ROUTES.SERVICES.OUR_METHOD}
+                    >
+                      Learn More
+                    </Link>
+                  </div>
+                  <div className="pointer-events-none absolute top-[326px] right-[-47px] h-[163px] w-[158px] rotate-[16deg] drop-shadow-[0px_4px_12px_rgba(0,0,0,0.35)]">
+                    <Image
+                      alt="LuxFlow Certified Seal"
+                      aria-hidden="true"
+                      className="object-contain"
+                      height={163}
+                      src={"/new-design-images/seal.webp"}
+                      width={158}
+                    />
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Right — video card on muted bg */}
+              <motion.div
+                className="relative flex min-h-[480px] items-center justify-center bg-[#EDE9E3] px-6 py-16 min-[1172px]:min-h-[600px] min-[1172px]:px-16"
+                initial="hidden"
+                variants={slideRight}
+                viewport={VP}
+                whileInView="visible"
+              >
+                {/* Video card */}
+                <div className="relative z-10 overflow-hidden rounded-[4px] bg-white shadow-[0px_20px_56px_0px_rgba(0,0,0,0.35)]">
+                  <video
+                    autoPlay
+                    className="block h-[430px] w-[420px] object-cover min-[1172px]:h-[530px] min-[1172px]:w-[520px]"
+                    loop
+                    muted
+                    playsInline
+                  >
+                    <source
+                      src="/new-design-videos/home-Authentication.mp4"
+                      type="video/mp4"
+                    />
+                  </video>
+                </div>
+              </motion.div>
+            </div>
+          </section>
+
+          {/* 10. FAQ — 50/50 split layout */}
+          <section className="bg-[#F5F3EF] px-6 pb-24">
+            <div className="mx-auto max-w-[1720px] border-[#D6D3D1] border-t pt-16">
+              <div className="grid w-full grid-cols-1 gap-12 min-[1172px]:grid-cols-2 min-[1172px]:gap-20 min-[1172px]:px-16">
+                <motion.div
+                  className="w-full"
+                  initial="hidden"
+                  variants={fadeUp}
+                  viewport={VP}
+                  whileInView="visible"
+                >
+                  <h2 className="font-extralight font-new-serif text-3xl leading-[1.1] min-[1172px]:text-[44px]">
+                    Frequently Asked
+                    <br />
+                    Questions
+                  </h2>
+                </motion.div>
+
+                <motion.div
+                  className="w-full"
+                  initial="hidden"
+                  variants={staggerContainerSlow}
+                  viewport={VP}
+                  whileInView="visible"
+                >
+                  <Accordion className="w-full" collapsible type="single">
+                    {LANDING_FAQ.map((item, index) => (
+                      <motion.div key={`faq-${index}`} variants={fadeUp}>
+                        <AccordionItem
+                          className="border-[#D6D3D1] first:border-t-0"
+                          value={`faq-${index}`}
+                        >
+                          <AccordionTrigger className="py-6 text-left [&>span] [&>span]:font-medium [&>span]:font-new-sans [&>span]:text-[18px]">
+                            {item.question}
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <p className="pb-4 font-new-sans text-sm leading-relaxed">
+                              {item.answer}
+                            </p>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </motion.div>
+                    ))}
+                  </Accordion>
+                </motion.div>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : (
+        <PreLoginContent />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero bottom callout — centered layout for non-authenticated users
+// ---------------------------------------------------------------------------
+const HERO_FEATURES = [
+  { id: "ai", Icon: Sparkles, label: "AI-Powered Valuation" },
+  { id: "payout", Icon: Zap, label: "Fast Cash or Crypto Payouts" },
+  { id: "nocheck", Icon: ShieldCheck, label: "No Credit Check or Paper Work" },
+  { id: "insured", Icon: Package, label: "Fully-Insured Shipping" },
+  { id: "storage", Icon: Lock, label: "Secure Storage" },
+] as const;
+
+function HeroPreLoginCallout() {
+  return (
+    <div className="relative border-white/20 border-b pb-0">
+      <motion.div
+        animate="visible"
+        className="flex flex-col items-center gap-5 px-6 pb-6 text-center min-[1172px]:pb-8"
+        initial="hidden"
+        transition={{ delay: 0.5 }}
+        variants={fadeUp}
+      >
+        <p className="max-w-[420px] font-new-sans text-[#F5F3EF]/80 text-base leading-relaxed tracking-[-0.01em]">
+          LuxFlow ensures a discrete, transparent, and trustworthy experience to
+          get fast liquidity on your luxury watches, designer handbags, or other
+          high-value items.
+        </p>
+        <motion.div
+          className="w-fit"
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+        >
+          <Link
+            className="group inline-flex h-12 items-center gap-2 rounded-[4px] border border-white/80 px-8 font-new-sans text-[#F5F3EF] text-sm transition-colors hover:bg-white/10"
+            href={APP_ROUTES.BUYBACK_REQUESTS.CREATE}
+          >
+            Start with a Quote
+            <span
+              aria-hidden="true"
+              className="transition-transform duration-200 group-hover:translate-x-1"
+            >
+              →
+            </span>
+          </Link>
+        </motion.div>
+      </motion.div>
+
+      {/* Features strip */}
+      <motion.div
+        animate="visible"
+        className="flex flex-wrap items-center justify-center gap-6 px-6 py-8 min-[1172px]:gap-9"
+        initial="hidden"
+        variants={staggerContainer}
+      >
+        {HERO_FEATURES.map(({ id, Icon, label }) => (
+          <motion.div
+            className="flex items-center gap-2 text-[#F5F3EF]/80 text-sm"
+            key={id}
+            variants={fadeIn}
+          >
+            <Icon className="shrink-0" size={20} strokeWidth={1.5} />
+            <span className="whitespace-nowrap font-new-sans">{label}</span>
+          </motion.div>
+        ))}
+      </motion.div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pre-login content — shown to non-authenticated users below the hero
+// ---------------------------------------------------------------------------
+function PreLoginContent() {
+  const router = useRouter();
+  return (
+    <section className="flex flex-col items-center gap-12 bg-[#F5F3EF] px-6 py-24 text-center min-[1172px]:gap-20 min-[1172px]:py-40">
+      <div className="flex flex-col items-center gap-5">
+        <h2 className="font-extralight font-new-serif text-[clamp(36px,5vw,64px)] leading-[1.1]">
+          <span className="block">Liquid Luxury</span>
+          <span className="block">Fast. Discreet. Hassle-free.</span>
+        </h2>
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#D6D3D1] px-4 py-3">
+          <span aria-label="UAE flag" role="img">
+            🇦🇪
+          </span>
+          <span className="font-new-sans text-base leading-none">
+            Now available in UAE
+          </span>
+        </div>
+      </div>
+
+      <p className="max-w-[700px] font-extralight font-new-serif text-[clamp(20px,2.5vw,36px)] leading-[1.2]">
+        LuxFlow combines speed, security, and sophistication. With Brink&apos;s
+        handling item custody, and a multi-layered authentication process that
+        combines AI and trusted experts.
+      </p>
+
+      <Button
+        onClick={() => {
+          router.push(APP_ROUTES.BUYBACK_REQUESTS.CREATE);
+        }}
+      >
+        Start with a Quote
+        <span aria-hidden="true">→</span>
+      </Button>
+    </section>
+  );
+}
+
+const swipeLeftAnimation = {
+  enter: {
+    x: "100%",
+    scale: 1.1,
+  },
+  center: {
+    x: 0,
+    scale: 1,
+  },
+  exit: {
+    x: "-100%",
+    scale: 1,
+  },
+};
+
+export function WatchSliderGallery() {
+  const [currentIndex, setCurrentIndex] = useState(1);
+  const totalImages = 5;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev === totalImages ? 1 : prev + 1));
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const imageNumber = currentIndex.toString().padStart(2, "0");
+
+  return (
+    <motion.div
+      className="relative grid grid-cols-3 items-center gap-12 max-lg:grid-cols-1 max-lg:gap-6"
+      initial="hidden"
+      variants={staggerContainer}
+      viewport={VP}
+      whileInView="visible"
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 hidden w-full min-[768px]:block"
+      />
+
+      <div className="flex flex-col gap-6 min-[1172px]:gap-10">
+        <motion.div
+          className="relative overflow-hidden rounded-[4px]"
+          variants={fadeUp}
+          whileHover={{ scale: 1.02 }}
+        >
+          <Image
+            alt="Bags"
+            className="aspect-[4/5] w-full object-cover min-[1172px]:h-[330px]"
+            height={330}
+            src="/new-design-images/landing-gallery/bags-2.webp"
+            width={560}
+          />
+        </motion.div>
+        <motion.div
+          className="relative overflow-hidden rounded-[4px]"
+          variants={fadeUp}
+          whileHover={{ scale: 1.02 }}
+        >
+          <Image
+            alt="Gold"
+            className="aspect-[4/3] w-full object-cover min-[1172px]:h-[238px]"
+            height={238}
+            src="/new-design-images/landing-gallery/gold-bars.webp"
+            width={560}
+          />
+          <div className="pointer-events-none absolute inset-0 bg-[rgba(111,85,23,0.45)] mix-blend-hard-light" />
+        </motion.div>
+      </div>
+
+      <motion.div
+        className="relative flex justify-center"
+        transition={{ duration: 0.2 }}
+        variants={scaleIn}
+        whileHover={{ scale: 1.05 }}
+      >
+        <div
+          className="relative overflow-hidden rounded-[4px] bg-black"
+          style={{ width: "440px", height: "494px" }}
+        >
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.div
+              animate="center"
+              className="h-full w-full"
+              exit="exit"
+              initial="enter"
+              key={currentIndex}
+              style={{
+                willChange: "transform",
+                position: "absolute",
+                top: 0,
+                left: 0,
+              }}
+              transition={{
+                x: { type: "tween", ease: "easeInOut", duration: 0.8 },
+                scale: { type: "tween", ease: "easeInOut", duration: 1.4 },
+              }}
+              variants={swipeLeftAnimation}
+            >
+              <Image
+                alt={`Watch Slider ${imageNumber}`}
+                className="h-full w-full object-contain"
+                height={494}
+                priority
+                src={`/new-design-images/watch-slider/watchSlider-${imageNumber}.avif`}
+                width={440}
+              />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </motion.div>
+
+      <div className="flex flex-col gap-6 min-[1172px]:gap-10">
+        <motion.div
+          className="relative overflow-hidden rounded-[4px]"
+          variants={fadeUp}
+          whileHover={{ scale: 1.02 }}
+        >
+          <Image
+            alt="Jewelry Top"
+            className="aspect-[4/3] w-full object-cover min-[1172px]:h-[284px]"
+            height={284}
+            src="/new-design-images/landing-gallery/jewerly-right-top.webp"
+            width={560}
+          />
+        </motion.div>
+        <motion.div
+          className="relative overflow-hidden rounded-[4px]"
+          variants={fadeUp}
+          whileHover={{ scale: 1.02 }}
+        >
+          <Image
+            alt="Jewelry Bottom"
+            className="aspect-[4/5] w-full object-cover min-[1172px]:h-[284px]"
+            height={284}
+            src="/new-design-images/landing-gallery/jewerly-right-bottom.webp"
+            width={560}
+          />
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}

@@ -1,0 +1,503 @@
+"use client";
+
+import {
+  useBuybackDetails,
+  useCanRenewBuyback,
+} from "@/shared/api/query-hooks/use-buyback";
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { useCurrencyFormatter } from "@/shared/lib/hooks/use-currency-formatter";
+import { getCdnUrl } from "@/shared/lib/utils/get-cdn-url";
+import {
+  type BuybackRequestDetail,
+  BuybackRequestStatus,
+} from "@/shared/types/buyback-request.types";
+import { BuybackStatus, BuybackType } from "@/shared/types/buyback.types";
+import { BackButton } from "@/shared/ui/back-button-new";
+import { Loader } from "@/shared/ui/loader";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Separator } from "@/shared/ui/shadcn/separator";
+import { DeliveryInfoBreakdown } from "@/widgets/buyback-delivery-info-breakdown";
+import { BuybackDetailsStepper } from "@/widgets/buyback-details-stepper-new";
+import { FinalOfferBreakdown } from "@/widgets/buyback-final-offer-breakdown";
+import { OfferDeclinedBlock } from "@/widgets/buyback-offer-declined-block";
+import { OfferExpiredBlock } from "@/widgets/buyback-offer-expired-block";
+import { OfferFinalOfferAcceptedBlock } from "@/widgets/buyback-offer-final-offer-accepted-block";
+import { OfferPostAuthFailedBlock } from "@/widgets/buyback-offer-post-auth-failed";
+import { PreAuthFailedBlock } from "@/widgets/buyback-pre-auth-failed-block";
+import { Clock4Icon } from "lucide-react";
+import { useSession } from "next-auth/react";
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+const BuybackRenewModal = dynamic(
+  () =>
+    import("@/widgets/buyback-renew-modal").then((mod) => ({
+      default: mod.BuybackRenewModal,
+    })),
+  { ssr: false }
+);
+
+const AssetReturnModal = dynamic(
+  () =>
+    import("@/widgets/asset-return-modal").then((mod) => ({
+      default: mod.AssetReturnModal,
+    })),
+  { ssr: false }
+);
+
+interface BuybackCompletedDetailsProps {
+  buybackId: string;
+}
+
+export function BuybackCompletedDetails(props: BuybackCompletedDetailsProps) {
+  const { buybackId } = props;
+  const { data: session } = useSession();
+  const router = useRouter();
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+  const [isAssetReturnModalOpen, setIsAssetReturnModalOpen] = useState(false);
+  const { data: buyback, isLoading } = useBuybackDetails(buybackId, true);
+  const { formatAmount } = useCurrencyFormatter();
+
+  console.log(buyback);
+
+  const { data: canRenewData } = useCanRenewBuyback(buybackId, !!buybackId);
+  const canRenew = canRenewData?.canExtend ?? false;
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (!buyback) {
+    return (
+      <div className="w-full px-4 py-5">
+        <div className="mx-auto w-full py-10 text-center">
+          <p className="font-serif text-lg">Buyback not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const isClosed = buyback.status === BuybackStatus.Closed;
+  const isUnsettled = buyback.status === BuybackStatus.Unsettled;
+  const isSold = buyback.status === BuybackStatus.Sold;
+
+  const userEmail = session?.user?.profile?.email;
+  const userPhone = session?.user?.profile?.phone;
+
+  const request = buyback.request as unknown as BuybackRequestDetail;
+  const asset = buyback.asset;
+
+  if (!(asset.brand && asset.model && asset.category))
+    return (
+      <div className="w-full px-3 py-4 sm:px-4 sm:py-5">
+        <div className="mx-auto w-full py-8 text-center sm:py-10">
+          <p className="font-serif text-base sm:text-lg">Asset not found</p>
+        </div>
+      </div>
+    );
+
+  if (!request)
+    return (
+      <div className="w-full px-3 py-4 sm:px-4 sm:py-5">
+        <div className="mx-auto w-full py-8 text-center sm:py-10">
+          <p className="font-serif text-base sm:text-lg">Request not found</p>
+        </div>
+      </div>
+    );
+
+  // Type of offer
+  const buybackTypeLabel =
+    buyback.type === BuybackType.Buyback
+      ? "Sale with Buyback"
+      : "Permanent Sale";
+
+  // STATE FOR BUYBACK REQUEST STATUS
+  // STEP: 2. If Indicative Offer Approval
+  const isPreAuthVerificationFailed =
+    request.status === BuybackRequestStatus.PreAuthVerificationFailed;
+  const showPreAuthOfferDeclinedBlock =
+    request.status === BuybackRequestStatus.RejectedPreAuthOffer;
+  const isExpired = buyback.status === BuybackStatus.OfferExpired;
+
+  // STEP 4. Final Offer Approval
+  const isFinalOfferDeclined =
+    request.status === BuybackRequestStatus.RejectedPostAuthOffer;
+  const isPostAuthVerificationFailed =
+    request.status === BuybackRequestStatus.PostAuthVerificationFailed;
+
+  // STEP 5. Buyback Activation
+  const isBuybackActivated = buyback.status === BuybackStatus.Active;
+
+  const isRejected =
+    isPreAuthVerificationFailed ||
+    showPreAuthOfferDeclinedBlock ||
+    isFinalOfferDeclined ||
+    isPostAuthVerificationFailed;
+
+  // TODO: Add status for Buyback
+  // const isBuybackPaid = buyback.status === BuybackStatus.Paid;
+  // const isItemHasBeenSent = buyback.status === BuybackStatus.ItemSent;
+  // const isItemReturned = buyback.status === BuybackStatus.ItemReturned;
+  // const isBuybackCLosed = buyback.status === BuybackStatus.Closed;
+
+  return (
+    <div className="min-h-screen w-full">
+      <div className="new-design w-full">
+        <BuybackDetailsStepper
+          closeData={buyback?.updatedAt}
+          currentStatus={request.status as BuybackRequestStatus}
+          dueDate={buyback.computedDetails?.dueDate}
+          eventsLog={buyback.eventsLog}
+          fundedOn={buyback.computedDetails?.fundedOn}
+          isClosed={buyback.status === BuybackStatus.Closed}
+        />
+        <Separator className="max-lg:hidden" />
+        <div className="mx-auto flex w-full flex-col-reverse pb-10 lg:grid lg:grid-cols-10 lg:items-start lg:gap-12">
+          {/* LEFT SECTION  */}
+          <div className="mt-8 flex w-full flex-col gap-4 lg:col-span-4 lg:px-0">
+            <div className="hidden lg:flex">
+              <BackButton href={APP_ROUTES.APP.MY_DEALS} label="Back" />
+            </div>
+
+            <div className="mt-4 flex flex-col gap-1">
+              {/* ---------------------- MODEL INFO BLOCK --------------------- */}
+              <div className="flex flex-col gap-1">
+                <span className="w-fit rounded-[8px] bg-[#E2E8F0] px-2 py-1 font-new-sans text-primary text-xs">
+                  {`${buybackTypeLabel} — ${buyback.id.slice(-6).toLocaleUpperCase()}`}
+                </span>
+                <div className="flex gap-2 font-extralight font-new-serif text-3xl max-md:flex-col">
+                  <h2 className="text-3xl">{asset.brand.name}</h2>
+                  <span className="text-3xl">{asset.model.name}</span>
+                </div>
+                {asset.modelNumber !== "N/A" && (
+                  <p className="font-new-sans text-muted-foreground text-xs sm:text-sm">
+                    Model Number: {asset.modelNumber}
+                  </p>
+                )}
+              </div>
+              {/* ------------------------------------------------------------- */}
+
+              {/* ------------------------ PRICE BLOCK ------------------------ */}
+              {!isRejected && (
+                <div className="flex flex-col gap-2">
+                  <h3 className="mt-9 flex flex-col font-[400] font-new-sans text-sm">
+                    Indicative Offer Amount
+                  </h3>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    {request.preAuthOffer?.data.amountCents && (
+                      <div className="flex items-center gap-2 font-extralight">
+                        {request.preAuthOffer?.data.amountCents ? (
+                          <span className="font-extralight font-new-serif text-4xl lg:text-5xl">
+                            {formatAmount(
+                              request.postAuthOffer?.data.amountCents ??
+                                request.preAuthOffer?.data.amountCents,
+                              { noDecimals: true },
+                            )}
+                          </span>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Clock4Icon size={32} />
+                            <span className="font-extralight font-new-serif text-4xl lg:text-5xl">
+                              Processing
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {buyback?.computedDetails?.purchasePriceCents && (
+                      <div className="flex items-center gap-2 font-extralight">
+                        {buyback?.computedDetails?.purchasePriceCents ? (
+                          <span className="font-extralight font-new-serif text-4xl lg:text-5xl">
+                            {formatAmount(
+                              buyback?.computedDetails?.purchasePriceCents,
+                              { noDecimals: true },
+                            )}
+                          </span>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Clock4Icon size={32} />
+                            <span className="font-extralight font-new-serif text-4xl lg:text-5xl">
+                              Processing
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {isExpired ? (
+                      <div className="flex gap-1 font-new-sans text-sm">
+                        <span>Offer expired</span>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1 font-new-sans text-sm">
+                        <span>Offer expires in:</span>
+
+                        <span className="font-semibold">48 hours</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* ------------------------------------------------------------ */}
+
+              {/* ------------------ INFO BLOCK (completed) ------------------ */}
+              {/* STEP: 2. If Indicative Offer Approval */}
+              {isPreAuthVerificationFailed && <PreAuthFailedBlock />}
+              {showPreAuthOfferDeclinedBlock && <OfferDeclinedBlock />}
+              {isExpired && (
+                <OfferExpiredBlock
+                  offerType={
+                    request.status === BuybackRequestStatus.PostAuthOfferExpired
+                      ? "post-auth"
+                      : "pre-auth"
+                  }
+                />
+              )}
+
+              {/* STEP 4. Final Offer Approval */}
+              {isFinalOfferDeclined && <OfferDeclinedBlock />}
+              {isPostAuthVerificationFailed && <OfferPostAuthFailedBlock />}
+              {/* ============================================================ */}
+
+              {/* STEP 5. Buyback Activation */}
+              {isBuybackActivated && (
+                <div>
+                  <OfferFinalOfferAcceptedBlock buybackId={buyback.id} />
+                  <div className="mt-12">
+                    {buyback?.computedDetails && (
+                      <FinalOfferBreakdown details={buyback.computedDetails} />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {
+                <div>
+                  <DeliveryInfoBreakdown />
+                  <div className="mt-12">
+                    {buyback?.computedDetails && (
+                      <FinalOfferBreakdown details={buyback.computedDetails} />
+                    )}
+                  </div>
+                </div>
+              }
+
+              <Separator className="my-10" />
+
+              {/* ------------------ DETAILS CARD INFO BLOCK ----------------- */}
+              <div className="space-y-4 rounded-2xl bg-[#EEE9E3] p-6 font-new-sans">
+                <h3 className="py-4 font-bold text-base text-gray-800">
+                  Item Details
+                </h3>
+                <div className="space-y-3 text-sm">
+                  {[
+                    {
+                      label: "Offer type and ID",
+                      value: `${buybackTypeLabel} — ${buyback.id.slice(-6).toLocaleUpperCase()}`,
+                    },
+                    { label: "Category", value: asset.category.name },
+                    { label: "Brand", value: asset.brand.name },
+                    { label: "Model", value: asset.model.name },
+                    { label: "Reference", value: "321 311.30.40.30.01.001" },
+                    { label: "Condition", value: asset.condition },
+                    {
+                      label: "Additional details",
+                      value:
+                        "Original box, Ownership Certificate, Other Documents",
+                    },
+                  ].map((item, i) => (
+                    <div
+                      className="flex items-start justify-between gap-4 border-gray-300/50 border-b pb-2 last:border-0"
+                      key={i}
+                    >
+                      <span className="shrink-0 text-gray-500">
+                        {item.label}
+                      </span>
+                      <span className="text-right font-semibold">
+                        {item.value as string}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* ============================================================ */}
+            </div>
+
+            {/* ----------------------- BUTTONS BLOCK ------------------------ */}
+            {!(
+              isClosed ||
+              isUnsettled ||
+              isSold ||
+              isRejected ||
+              isExpired
+            ) && (
+              <div className="mt-6 flex items-center gap-3">
+                <Button
+                  className="flex-1"
+                  disabled={!canRenew}
+                  onClick={() => setIsRenewModalOpen(true)}
+                  variant="outline"
+                >
+                  Renew
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() =>
+                    router.push(APP_ROUTES.BUYBACKS.PAY(buybackId))
+                  }
+                >
+                  Buy Back
+                </Button>
+              </div>
+            )}
+            {/* ============================================================== */}
+
+            {/* <div className="pb-10 lg:pb-0">
+              <BuybackRequestView
+                isSubmittingPostAuth={isSubmittingPostAuth}
+                isSubmittingPreAuth={isSubmittingPreAuth}
+                onAcceptPostAuthOffer={handleAcceptPostAuthOffer}
+                onAcceptPreAuthOffer={handleAcceptPreAuthOffer}
+                onRejectOffer={actions.openRejectModal}
+                request={request}
+              />
+            </div> */}
+          </div>
+
+          {/* RIGHT SECTION */}
+          <div className="col-span-6 grid w-full gap-[2px]">
+            <Separator className="mt-4 lg:hidden" />
+            <div className="py-8 lg:hidden">
+              <BackButton href={APP_ROUTES.APP.MY_DEALS} label="Back" />
+            </div>
+            <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto lg:grid lg:grid-cols-2 lg:gap-[2px] lg:overflow-visible">
+              {[...(asset.photos ?? [])].map((photo, index, array) => (
+                <div
+                  className="lg:!mr-0 relative aspect-square w-[90%] flex-shrink-0 snap-center overflow-hidden lg:w-auto"
+                  key={photo + index}
+                  style={{
+                    marginRight: index !== array.length - 1 ? "8px" : "0px",
+                  }}
+                >
+                  <Image
+                    alt={`Asset photo ${index + 1}`}
+                    className="object-cover object-center"
+                    fill
+                    src={getCdnUrl(photo)}
+                    unoptimized
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* MODALS */}
+
+        {/* <AssetHandoverModal
+          isOpen={modals.isAcceptModalOpen}
+          onClose={actions.closeAcceptModal}
+          request={request}
+        />
+
+        <RejectOfferModal
+          isOpen={modals.isRejectModalOpen}
+          offerType={modals.rejectOfferType}
+          onClose={actions.closeRejectModal}
+          request={request}
+        />
+
+        <TrackRequestModal
+          isOpen={modals.isTrackModalOpen}
+          onClose={actions.closeTrackModal}
+          request={request}
+        />
+
+        <KycVerificationRequiredModal
+          buybackRequestId={requestId}
+          isOpen={modals.isKycModalOpen}
+          onClose={actions.closeKycModal}
+        /> */}
+
+        <style global jsx>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
+      </div>
+
+      {/* ------------------------- CONTINUE BLOCK --------------------------------- */}
+      <div className="mx-auto w-full space-y-5">
+        {/* MODALS */}
+        {userEmail && userPhone && (
+          <>
+            <BuybackRenewModal
+              buyback={buyback}
+              isOpen={isRenewModalOpen}
+              onClose={() => setIsRenewModalOpen(false)}
+              userEmail={userEmail}
+              userPhone={userPhone}
+            />
+
+            <AssetReturnModal
+              buyback={buyback}
+              isOpen={isAssetReturnModalOpen}
+              onClose={() => setIsAssetReturnModalOpen(false)}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// const extensions = buyback.extensions || [];
+// // const assetName = `${asset.brand?.name} ${asset.model?.name}`;
+// const canInitiateReturn = asset.status === AssetStatus.PendingReturn;
+
+// {
+//   /* TODO: Check this */
+// }
+// {
+//   /* {showGracePeriodWarning && buyback.computedDetails && (
+//           <BuybackDueDateWarning computedDetails={buyback.computedDetails} />
+//         )}
+
+//         {showLateFeeWarning && buyback.computedDetails && (
+//           <BuybackOverdue computedDetails={buyback.computedDetails} />
+//         )} */
+// }
+
+// {
+//   /* MAIN SECTION */
+// }
+// {
+//   /* <UnsettledBuybackWarning buyback={buyback} />
+//         <BuybackCompletedHeader buyback={buyback} />
+//         <BuybackAssetDetailsSection buyback={buyback} />
+//         <BuybackDetailSection
+//           buyback={buyback}
+//           withdrawals={buyback.withdrawals}
+//         />
+
+//         {extensions.length > 0 && (
+//           <BuybackExtensionSummarySection buyback={buyback} />
+//         )}
+
+//         {canInitiateReturn && (
+//           <div className="flex justify-end border-primary border-t pt-5">
+//             <Button
+//               onClick={() => setIsAssetReturnModalOpen(true)}
+//               size="small"
+//             >
+//               Arrange Asset Return
+//             </Button>
+//           </div>
+//         )} */
+// }

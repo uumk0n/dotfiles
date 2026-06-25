@@ -1,0 +1,114 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+
+import { ApiExtraModels, ApiTags } from '@nestjs/swagger';
+
+import { Protected } from '@/modules/auth';
+
+import { UserRole } from '@/db';
+
+import { TicketService } from '@/modules/ticket';
+
+import { ListQuery } from '@/utils';
+
+import {
+  RaiseTicketDto,
+  TicketFiltersUserDto,
+  TicketListItemDto,
+  TicketResponseDto,
+} from './dtos';
+import {
+  CancelTicketOpenApi,
+  DeleteTicketOpenApi,
+  GetTicketOpenApi,
+  GetTicketsOpenApi,
+  RaiseTicketOpenApi,
+} from './tickets.openapi';
+import { ContextService } from '@/modules/global';
+
+@ApiTags('App / Tickets')
+@ApiExtraModels(TicketListItemDto, TicketResponseDto)
+@Controller()
+@Protected([UserRole.Bidder, UserRole.Seller, UserRole.Retailer])
+export class TicketsController {
+  constructor(
+    private readonly ticketService: TicketService,
+    private readonly contextService: ContextService,
+  ) {}
+
+  @Get('/')
+  @GetTicketsOpenApi()
+  async getMany(
+    @Query() listQuery: ListQuery,
+    @Query() filters: TicketFiltersUserDto,
+  ) {
+    const userId = this.contextService.context.user.id;
+
+    const { data, total, skip, take } = await this.ticketService.getMany(
+      userId,
+      listQuery,
+      filters,
+    );
+
+    return {
+      data: data.map(TicketListItemDto.mapFromEntity),
+      total,
+      skip,
+      take,
+    };
+  }
+
+  @Get(':id')
+  @GetTicketOpenApi()
+  async getOne(@Param('id') id: string): Promise<TicketResponseDto> {
+    const userId = this.contextService.context.user.id;
+
+    const ticket = await this.ticketService.getOne(id, userId);
+
+    return TicketResponseDto.mapFromEntity(ticket);
+  }
+
+  @Post('/')
+  @RaiseTicketOpenApi()
+  async raise(@Body() body: RaiseTicketDto): Promise<TicketResponseDto> {
+    const userId = this.contextService.context.user.id;
+
+    const ticket = await this.ticketService.raise(userId, {
+      subject: body.subject,
+      description: body.description,
+      category: body.category,
+      referenceId: body.referenceId,
+      attachedFileIds: body.attachedFileIds,
+      preferredContactMethods: body.preferredContactMethods,
+    });
+
+    return TicketResponseDto.mapFromEntity(ticket);
+  }
+
+  @Post(':id/cancel')
+  @CancelTicketOpenApi()
+  @Protected([UserRole.Bidder, UserRole.Seller, UserRole.Retailer])
+  async cancel(@Param('id') id: string) {
+    const userId = this.contextService.context.user.id;
+
+    await this.ticketService.cancel(id, userId);
+  }
+
+  @Delete(':id')
+  @DeleteTicketOpenApi()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async softDelete(@Param('id') id: string) {
+    const userId = this.contextService.context.user.id;
+
+    await this.ticketService.softDelete(id, userId);
+  }
+}

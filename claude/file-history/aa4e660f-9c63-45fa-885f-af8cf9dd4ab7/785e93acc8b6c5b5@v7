@@ -1,0 +1,133 @@
+import { Lock, Sparkles, ShieldCheck } from "lucide-react";
+import Image from "next/image";
+import type { FC, ReactNode } from "react";
+
+import { cn } from "@/shared/lib/ui/cn";
+import { Header } from "@/widgets/header";
+
+type Feature = {
+  label: string;
+} & (
+  | { Icon: React.ComponentType<{ className?: string; size?: number; strokeWidth?: number }> }
+  | { imgSrc: string }
+);
+
+const FEATURES: Feature[] = [
+  { imgSrc: "/new-design-images/auth/discreet-icon.svg", label: "100% Discreet Transactions" },
+  { Icon: Sparkles, label: "AI-Powered Valuation" },
+  { Icon: ShieldCheck, label: "Fully-Insured Shipping" },
+  { Icon: Lock, label: "Secure Storage" },
+];
+
+type AuthLayoutProps = {
+  children: ReactNode;
+};
+
+export const AuthLayout: FC<AuthLayoutProps> = ({ children }) => (
+  <div className="new-design mt-[61px] flex flex-col bg-[#F5F3EF] max-lg:mt-[48px] max-lg:min-h-[calc(100dvh-48px)] lg:h-[calc(100dvh-61px)] lg:overflow-hidden">
+    <Header />
+
+    <div className="relative flex flex-1 flex-col lg:flex-row lg:items-stretch lg:min-h-0">
+      {/* Wave background */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <Image
+          src="/new-design-images/auth/bg-wave.png"
+          alt=""
+          fill
+          className="object-cover"
+        />
+      </div>
+
+      {/* Mobile-only feature section */}
+      <div className="relative z-10 flex shrink-0 flex-col gap-5 px-4 py-5 lg:hidden">
+        <div className="flex w-fit items-center gap-3 rounded-full border border-[#A8A29E] px-4 py-3">
+          <span aria-hidden>🇦🇪</span>
+          <span className="font-new-sans text-[#44403C] text-base leading-[150%] tracking-[-0.01em]">
+            Now available across the UAE
+          </span>
+        </div>
+        <p
+          className="font-new-serif text-[#000944] text-[24px] leading-[120%]"
+          style={{ fontWeight: 200 }}
+        >
+          Your{" "}
+          <span className="text-[#001a8c]">secured platform</span>
+          {" "}for selling and buyback luxury items.
+        </p>
+      </div>
+
+      {/* Left: Marketing Content (desktop only) */}
+      <div className="relative hidden min-h-0 flex-1 flex-col justify-between p-10 lg:flex">
+        {/* UAE Badge */}
+        <div className="flex w-fit items-center gap-3 rounded-full border border-[#A8A29E] px-4 py-3">
+          <span aria-hidden>🇦🇪</span>
+          <span className="font-new-sans text-[#44403C] text-base leading-[150%] tracking-[-0.01em]">
+            Now available in UAE
+          </span>
+        </div>
+
+        {/* Hero Headline */}
+        <p
+          className="max-w-[700px] font-new-serif text-[#000944] text-[72px] leading-[110%]"
+          style={{ fontWeight: 200 }}
+        >
+          Your{" "}
+          <span className="text-[#001a8c]">secured platform</span>
+          {" "}for selling and buyback luxury items.
+        </p>
+
+        {/* Feature Callouts */}
+        <div className="flex max-w-[660px] flex-wrap gap-x-10">
+          {FEATURES.map((feature, i) => (
+            <div
+              className={cn(
+                "flex w-[299px] items-center gap-2 py-5",
+                i < 2 && "border-[#D6D3D1] border-b"
+              )}
+              key={feature.label}
+            >
+              {"imgSrc" in feature ? (
+                <Image
+                  src={feature.imgSrc}
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="shrink-0"
+                />
+              ) : (
+                <feature.Icon
+                  className="shrink-0 text-[#44403C]"
+                  size={32}
+                  strokeWidth={1.25}
+                />
+              )}
+              <span className="font-new-sans text-[#44403C] text-base leading-[150%] tracking-[-0.01em]">
+                {feature.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right: Form Card */}
+      <div className="relative z-10 flex flex-1 w-full items-center justify-center overflow-hidden px-4 py-6 lg:flex-none lg:w-[660px] lg:shrink-0 lg:overflow-visible lg:px-[120px] lg:py-8">
+        <div className="w-full max-w-[420px] rounded-2xl border border-[#D6D3D1] bg-[#F5F3EF] px-4 pt-8 pb-4 shadow-[0px_20px_28px_rgba(0,0,0,0.05)] lg:[padding-inline:24px]">
+          {children}
+        </div>
+
+        {/* Bottom-right seal */}
+        <div className="pointer-events-none absolute right-[-65px] bottom-[-76px] flex h-[263px] w-[259px] items-center justify-center">
+          <div className="-rotate-[14.89deg] flex-none">
+            <Image
+              src="/new-design-images/auth/seal.png"
+              alt=""
+              width={210}
+              height={216}
+              className="object-cover"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);

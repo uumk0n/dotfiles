@@ -1,0 +1,18 @@
+import { Injectable } from '@nestjs/common';
+
+import { CountryEntity } from '@/db';
+import { TransactionHost } from '@nestjs-cls/transactional';
+import { TransactionalAdapterTypeOrm } from '@/modules/global';
+
+@Injectable()
+export class CountryService {
+  constructor(
+    private readonly txHost: TransactionHost<TransactionalAdapterTypeOrm>,
+  ) {}
+
+  async getAll() {
+    const countryRepository = this.txHost.tx.getRepository(CountryEntity);
+
+    return countryRepository.find({ where: { enabled: true } });
+  }
+}

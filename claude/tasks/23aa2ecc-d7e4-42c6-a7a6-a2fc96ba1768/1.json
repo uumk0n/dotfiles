@@ -1,0 +1,9 @@
+{
+  "id": "1",
+  "subject": "Code review for feature/general-exceptions branch",
+  "description": "Conduct a thorough code review of the PR from the feature/general-exceptions branch following the specified process: eligibility check, gather CLAUDE.md files, get PR summary, run 5 parallel review agents, score issues, filter, and post comment.",
+  "activeForm": "Conducting code review",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,204 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { AbstractNotificationService } from './abstract-notification.service';
+import {
+  MEDIA_TYPE_TO_CONTENT,
+  NotificationData,
+  NotificationMedia,
+  NotificationType,
+} from '../consts';
+import { UserEntity } from '@/db';
+import { EmailParams, MailerSend, Recipient, Sender } from 'mailersend';
+
+import { env, isDevelopment } from '@/env';
+import {
+  GeneralTemplate,
+  InviteTemplate,
+  OtpTemplate,
+  createEmailService,
+} from '@luxflow/email-templates';
+
+@Injectable()
+export class EmailNotificationService implements AbstractNotificationService {
+  private readonly logger = new Logger(EmailNotificationService.name);
+  private mailerSend: MailerSend;
+
+  private emailService = createEmailService({
+    defaultFrom: env.MAIL_SENDER_EMAIL,
+    defaultReplyTo: env.MAIL_REPLY_TO_EMAIL,
+    validateEmails: false,
+  });
+
+  constructor() {
+    this.mailerSend = new MailerSend({
+      apiKey: env.MAILERSEND_API_KEY,
+    });
+  }
+
+  async send<T extends NotificationType>(
+    users: UserEntity[],
+    _type: T,
+    _data: NotificationData<T>,
+    content: MEDIA_TYPE_TO_CONTENT<NotificationMedia.Email>,
+  ) {
+    const { html, text } = await this.emailService.render(
+      GeneralTemplate({
+        message: content.text,
+        link: content.link,
+      }),
+    );
+
+    await this.sendEmail({
+      to: users.map((u) => u.email),
+      subject: content.subject,
+      html,
+      text,
+    });
+  }
+
+  async sendOtp(dto: {
+    otp: string;
+    reason: string;
+    validForMinutes: number;
+    to: string;
+  }) {
+    const { html, text } = await this.emailService.render(
+      OtpTemplate({
+        otp: dto.otp,
+        reason: dto.reason,
+        validForMinutes: dto.validForMinutes,
+      }),
+    );
+
+    await this.sendEmail({
+      to: [dto.to],
+      subject: 'LuxFlow OTP',
+      html,
+      text,
+    });
+  }
+
+  async sendInvite(dto: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    patronymic?: string | null;
+    role: string;
+    tempPassword: string;
+  }) {
+    const { email, firstName, lastName, patronymic, role, tempPassword } = dto;
+    const fullName = [firstName, patronymic, lastName].filter(Boolean).join(' ');
+
+    const { html, text } = await this.emailService.render(
+      InviteTemplate({
+        name: fullName,
+        tempPassword,
+        url: `${env.CORE_PUBLIC_URL}/sign-in`,
+        role,
+      }),
+    );
+
+    await this.sendEmail({
+      to: [email],
+      subject: 'LuxFlow Invitation',
+      html,
+      text,
+    });
+  }
+
+  async sendContactFormTeamNotification(dto: {
+    to: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    subject: string | null;
+    message: string;
+  }) {
+    const lines = [
+      `New contact form submission:`,
+      ``,
+      `Name: ${dto.firstName} ${dto.lastName}`,
+      `Email: ${dto.email}`,
+      dto.subject ? `Subject: ${dto.subject}` : null,
+      ``,
+      `Message:`,
+      dto.message,
+    ]
+      .filter((line) => line !== null)
+      .join('\n');
+
+    const { html, text } = await this.emailService.render(
+      GeneralTemplate({ message: lines }),
+    );
+
+    await this.sendEmail({
+      to: [dto.to],
+      subject: `Contact Form: ${dto.firstName} ${dto.lastName}`,
+      html,
+      text,
+    });
+  }
+
+  async sendContactFormConfirmation(dto: { to: string; firstName: string }) {
+    const { html, text } = await this.emailService.render(
+      GeneralTemplate({
+        message: `Hi ${dto.firstName},\n\nThank you for reaching out. We have received your message and will get back to you shortly.`,
+      }),
+    );
+
+    await this.sendEmail({
+      to: [dto.to],
+      subject: 'We received your message — LuxFlow',
+      html,
+      text,
+    });
+  }
+
+  async suppressEmails(emails: string[], reason: string) {
+    // todo: implement
+    this.logger.log(
+      `Suppressing emails: ${emails.join(', ')}. Reason: ${reason}`,
+    );
+  }
+
+  private async sendEmail({
+    to,
+    subject,
+    html,
+    text,
+  }: {
+    to: string[];
+    subject: string;
+    html: string;
+    text?: string;
+  }) {
+    if (!env.MAIL_ENABLED) {
+      return;
+    }
+
+    const sentFrom = new Sender(env.MAIL_SENDER_EMAIL, 'LuxFlow');
+    const replyTo = new Sender(env.MAIL_REPLY_TO_EMAIL, 'LuxFlow Admin');
+
+    const recipients = to.map((email) => new Recipient(email));
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setReplyTo(replyTo)
+      .setSubject(subject)
+      .setHtml(html)
+      .setText(text ?? '');
+
+    try {
+      this.logger.log('Sending email:', {
+        to,
+        subject,
+      });
+      const response = await this.mailerSend.email.send(emailParams);
+      this.logger.log('Email sent:', response);
+      return response;
+    } catch (err) {
+      this.logger.error('Error sending email:', err);
+      throw err;
+    }
+  }
+}

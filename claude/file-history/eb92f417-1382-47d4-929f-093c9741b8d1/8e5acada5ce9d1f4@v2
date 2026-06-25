@@ -1,0 +1,1761 @@
+"use client";
+
+import { useBuybackDetails } from "@/shared/api/query-hooks/use-buyback";
+import { useCompleteBuyback } from "@/shared/api/query-hooks/use-buyback-payment";
+import {
+  useCreateNowPaymentsCheckout,
+  useCreatePayment,
+  useCreatePaymentIntent,
+  useCreatePayPalCheckoutSession,
+  useNowPaymentsCurrencies,
+} from "@/shared/api/query-hooks/use-payments";
+import { usePayPalMethods } from "@/shared/api/query-hooks/use-paypal-methods";
+import { useStripeMethods } from "@/shared/api/query-hooks/use-stripe-methods";
+import { useWalletBalance } from "@/shared/api/query-hooks/use-wallet";
+import { ApiKeys } from "@/shared/api/query-keys";
+import { paymentService } from "@/shared/api/services/payment.service";
+import { APP_ROUTES } from "@/shared/config/app-routes";
+import { useCurrencyFormatter } from "@/shared/lib/hooks/use-currency-formatter";
+import { usePaymentPolling } from "@/shared/lib/hooks/use-payment-polling";
+import { generateItemTitle, getSecondaryDisplayInfo } from "@/shared/lib/items";
+import { getStripe } from "@/shared/lib/stripe/get-stripe";
+import { cn } from "@/shared/lib/utils";
+import { centsToDollars } from "@/shared/lib/utils/price-formatter";
+import {
+  type NowPaymentsCheckoutResponse,
+  paymentMethodMap,
+  PaymentPurpose,
+  PaymentStatus,
+} from "@/shared/types/payment.types";
+import { BackButton } from "@/shared/ui/back-button";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
+import { UploadProgressScreen } from "@/shared/ui/upload-progress-screen";
+import { toast } from "@/shared/ui/notification";
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
+import {
+  CardCvcElement,
+  CardExpiryElement,
+  CardNumberElement,
+  Elements,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
+import { useQueryClient } from "@tanstack/react-query";
+import type { AxiosError } from "axios";
+import { QrCode } from "lucide-react";
+import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import QRCode from "react-qr-code";
+
+const STRIPE_ELEMENT_STYLE = {
+  style: {
+    base: {
+      fontSize: "14px",
+      fontFamily: "DM Sans, sans-serif",
+      color: "#44403C",
+      "::placeholder": { color: "#A8A29E" },
+    },
+    invalid: { color: "#ef4444" },
+  },
+};
+
+type PaymentTab = "card" | "crypto";
+
+type CryptoPhase =
+  | { phase: "idle" }
+  | { phase: "generating" }
+  | {
+      phase: "awaiting" | "confirming";
+      checkout: NowPaymentsCheckoutResponse;
+      paymentId: string;
+    }
+  | { phase: "failed" };
+
+type SelectedMethod =
+  | { type: "stripe-new" }
+  | { type: "stripe-saved"; id: string; last4: string; brand?: string }
+  | { type: "paypal-new" }
+  | { type: "paypal-saved"; id: string; email: string };
+
+type PaymentStep = "select" | "processing" | "success";
+
+interface CardFormValues {
+  cardholderName: string;
+  saveCard: boolean;
+  acceptTerms: boolean;
+}
+
+interface BuybackPaymentFormProps {
+  buybackId: string;
+}
+
+function BuybackPaymentForm({ buybackId }: BuybackPaymentFormProps) {
+  const router = useRouter();
+  const stripe = useStripe();
+  const elements = useElements();
+  const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+
+  const { data: buyback, isLoading: buybackLoading } = useBuybackDetails(
+    buybackId,
+    true
+  );
+  const { formatAmount } = useCurrencyFormatter();
+  const { balance: walletBalance } = useWalletBalance();
+  const { data: stripeMethods } = useStripeMethods();
+  const { data: paypalMethods } = usePayPalMethods();
+
+  const createPayment = useCreatePayment();
+  const createPaymentIntent = useCreatePaymentIntent();
+  const createPayPalCheckoutSession = useCreatePayPalCheckoutSession();
+  const createNowPaymentsCheckout = useCreateNowPaymentsCheckout();
+  const completeBuyback = useCompleteBuyback();
+
+  const isPayPalReturn = searchParams.get("paypal_return") === "success";
+  const paypalReturnPaymentId = searchParams.get("payment_id");
+
+  const [tab, setTab] = useState<PaymentTab>("card");
+  const [step, setStep] = useState<PaymentStep>(
+    isPayPalReturn ? "processing" : "select"
+  );
+  const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>({
+    type: "stripe-new",
+  });
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(isPayPalReturn);
+  const [cryptoPhase, setCryptoPhase] = useState<CryptoPhase>({
+    phase: "idle",
+  });
+  const [cryptoPaymentId, setCryptoPaymentId] = useState<string | null>(null);
+  const submittedRef = useRef(false);
+  const paypalHandledRef = useRef(false);
+
+  const { register, watch, setValue } = useForm<CardFormValues>({
+    defaultValues: { cardholderName: "", saveCard: true, acceptTerms: false },
+  });
+
+  const cardholderName = watch("cardholderName");
+  const saveCard = watch("saveCard");
+  const acceptTerms = watch("acceptTerms");
+
+  const outstandingCents =
+    buyback?.computedDetails?.outstandingAmountCents ?? 0;
+  const hasSufficientBalance = walletBalance >= outstandingCents;
+  const shortfallCents = hasSufficientBalance
+    ? 0
+    : outstandingCents - walletBalance;
+
+  // Poll GET /payments/:id until webhook is processed (status = SUCCEEDED/FAILED)
+  const pollPaymentStatus = useCallback(
+    async (paymentId: string): Promise<boolean> => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const payment = await paymentService.getPayment(paymentId);
+
+        if (payment.status === PaymentStatus.SUCCEEDED) {
+          await queryClient.invalidateQueries({ queryKey: ApiKeys.wallet() });
+          return true;
+        }
+
+        if (
+          payment.status === PaymentStatus.FAILED ||
+          payment.status === PaymentStatus.CANCELED ||
+          payment.status === PaymentStatus.EXPIRED
+        ) {
+          return false;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      return false;
+    },
+    [queryClient]
+  );
+
+  const cryptoCheckout =
+    cryptoPhase.phase === "awaiting" || cryptoPhase.phase === "confirming"
+      ? cryptoPhase.checkout
+      : null;
+
+  const handleCryptoSuccess = useCallback(async () => {
+    setCryptoPaymentId(null);
+    setStep("processing");
+    try {
+      await completeBuyback.mutateAsync(buybackId);
+      setStep("success");
+    } catch {
+      setStep("select");
+    }
+  }, [buybackId, completeBuyback]);
+
+  const handleCryptoFailure = useCallback(() => {
+    setCryptoPaymentId(null);
+    setCryptoPhase({ phase: "failed" });
+  }, []);
+
+  const isCryptoPollingActive =
+    cryptoPhase.phase === "awaiting" || cryptoPhase.phase === "confirming";
+
+  const { payment: polledCryptoPayment } = usePaymentPolling(
+    isCryptoPollingActive ? cryptoPaymentId : null,
+    {
+      interval: 8000,
+      onSuccess: handleCryptoSuccess,
+      onFailure: handleCryptoFailure,
+    }
+  );
+
+  useEffect(() => {
+    if (
+      polledCryptoPayment?.status === PaymentStatus.CONFIRMING &&
+      cryptoPhase.phase === "awaiting" &&
+      cryptoCheckout
+    ) {
+      setCryptoPhase({
+        phase: "confirming",
+        checkout: cryptoCheckout,
+        paymentId: cryptoPaymentId ?? "",
+      });
+    }
+  }, [
+    polledCryptoPayment?.status,
+    cryptoPhase.phase,
+    cryptoCheckout,
+    cryptoPaymentId,
+  ]);
+
+  async function handleGenerateCryptoPayment(payCurrency: string) {
+    setCryptoPhase({ phase: "generating" });
+
+    try {
+      const payment = await createPayment.mutateAsync({
+        purpose: PaymentPurpose.DEPOSIT,
+        walletAmount: centsToDollars(
+          shortfallCents > 0 ? shortfallCents : outstandingCents
+        ),
+        method: paymentMethodMap.crypto,
+        currency: "USD",
+        idempotencyKey: `buyback_crypto_${buybackId}_${Date.now()}`,
+      });
+
+      const checkout = await createNowPaymentsCheckout.mutateAsync({
+        paymentId: payment.id,
+        payCurrency,
+      });
+
+      setCryptoPaymentId(payment.id);
+      setCryptoPhase({ phase: "awaiting", checkout, paymentId: payment.id });
+    } catch {
+      setCryptoPhase({ phase: "idle" });
+    }
+  }
+
+  function handleCryptoRetry() {
+    setCryptoPaymentId(null);
+    setCryptoPhase({ phase: "idle" });
+  }
+
+  function handleCryptoExpired() {
+    setCryptoPaymentId(null);
+    setCryptoPhase({ phase: "failed" });
+  }
+
+  useEffect(() => {
+    if (
+      !(isPayPalReturn && paypalReturnPaymentId) ||
+      paypalHandledRef.current ||
+      buybackLoading ||
+      !buyback
+    )
+      return;
+
+    paypalHandledRef.current = true;
+    setIsProcessing(true);
+    setStep("processing");
+
+    pollPaymentStatus(paypalReturnPaymentId)
+      .then((succeeded) => {
+        if (!succeeded) {
+          toast.error("Payment was not completed. Please try again.");
+          setStep("select");
+          setIsProcessing(false);
+          return;
+        }
+        return completeBuyback.mutateAsync(buybackId);
+      })
+      .then((result) => {
+        if (result !== undefined) {
+          setStep("success");
+        }
+      })
+      .catch((error: unknown) => {
+        setStep("select");
+        const axiosError = error as AxiosError<{ message?: string }>;
+        toast.error(
+          axiosError.response?.data?.message ??
+            "Payment failed. Please try again."
+        );
+      })
+      .finally(() => {
+        setIsProcessing(false);
+        submittedRef.current = false;
+      });
+  }, [
+    buyback,
+    buybackId,
+    buybackLoading,
+    completeBuyback,
+    isPayPalReturn,
+    paypalReturnPaymentId,
+    pollPaymentStatus,
+  ]);
+
+  async function handleCompletePayment() {
+    if (submittedRef.current || isProcessing) return;
+
+    if (!acceptTerms) {
+      toast.error("Please accept the LuxFlow Terms of Use to continue");
+      return;
+    }
+
+    submittedRef.current = true;
+    setIsProcessing(true);
+    setCardError(null);
+
+    try {
+      if (hasSufficientBalance) {
+        setStep("processing");
+        await completeBuyback.mutateAsync(buybackId);
+        setStep("success");
+        return;
+      }
+
+      const topUpAmountDollars = centsToDollars(shortfallCents);
+
+      if (
+        selectedMethod.type === "paypal-new" ||
+        selectedMethod.type === "paypal-saved"
+      ) {
+        const payment = await createPayment.mutateAsync({
+          purpose: PaymentPurpose.DEPOSIT,
+          walletAmount: topUpAmountDollars,
+          method: paymentMethodMap.paypal,
+          idempotencyKey: `buyback_${buybackId}_${Date.now()}`,
+        });
+
+        const payPageUrl = `${window.location.origin}${APP_ROUTES.BUYBACKS.PAY(buybackId)}`;
+        const session = await createPayPalCheckoutSession.mutateAsync({
+          paymentId: payment.id,
+          paymentMethodId:
+            selectedMethod.type === "paypal-saved"
+              ? selectedMethod.id
+              : undefined,
+          returnUrl: `${payPageUrl}?paypal_return=success&payment_id=${payment.id}`,
+          cancelUrl: payPageUrl,
+        });
+
+        if (!session.url) throw new Error("Missing PayPal checkout URL");
+        window.location.href = session.url;
+        return;
+      }
+
+      if (!(stripe && elements)) {
+        toast.error("Payment system not loaded. Please refresh.");
+        return;
+      }
+
+      const payment = await createPayment.mutateAsync({
+        purpose: PaymentPurpose.DEPOSIT,
+        walletAmount: topUpAmountDollars,
+        method: paymentMethodMap.stripe,
+        idempotencyKey: `buyback_${buybackId}_${Date.now()}`,
+      });
+
+      const intentData = await createPaymentIntent.mutateAsync({
+        paymentId: payment.id,
+        savedMethodId:
+          selectedMethod.type === "stripe-saved"
+            ? selectedMethod.id
+            : undefined,
+      });
+
+      let confirmResult:
+        | Awaited<ReturnType<typeof stripe.confirmCardPayment>>
+        | undefined;
+
+      if (selectedMethod.type === "stripe-saved") {
+        confirmResult = await stripe.confirmCardPayment(
+          intentData.clientSecret,
+          { payment_method: selectedMethod.id }
+        );
+      } else {
+        const cardNumberElement = elements.getElement(CardNumberElement);
+        if (!cardNumberElement) throw new Error("Card element not found");
+
+        confirmResult = await stripe.confirmCardPayment(
+          intentData.clientSecret,
+          {
+            payment_method: {
+              card: cardNumberElement,
+              billing_details: { name: cardholderName },
+            },
+            setup_future_usage: saveCard ? "off_session" : undefined,
+          }
+        );
+      }
+
+      if (confirmResult?.error) {
+        setCardError(confirmResult.error.message ?? "Card payment failed");
+        return;
+      }
+
+      setStep("processing");
+
+      const paymentSucceeded = await pollPaymentStatus(payment.id);
+      if (!paymentSucceeded) {
+        toast.error("Payment was not completed. Please try again.");
+        setStep("select");
+        return;
+      }
+
+      await completeBuyback.mutateAsync(buybackId);
+      setStep("success");
+    } catch (error) {
+      setStep("select");
+      const axiosError = error as AxiosError<{ message?: string }>;
+      if (!cardError) {
+        toast.error(
+          axiosError.response?.data?.message ??
+            "Payment failed. Please try again."
+        );
+      }
+    } finally {
+      setIsProcessing(false);
+      submittedRef.current = false;
+    }
+  }
+
+  if (buybackLoading) {
+    return <UploadProgressScreen className="min-h-[60vh]" />;
+  }
+
+  if (!buyback) {
+    return (
+      <div className="py-16 text-center font-new-sans text-[#44403C]">
+        Buyback not found.
+      </div>
+    );
+  }
+
+  const asset = buyback.asset;
+
+  const itemTitle = generateItemTitle(
+    asset.category.name,
+    asset.categoryFields
+  );
+  const secondaryInfo = getSecondaryDisplayInfo(
+    asset.category.name,
+    asset.categoryFields
+  );
+
+  const assetName = `${itemTitle}`;
+
+  const assetPhoto = asset.photos?.[0];
+  if (step === "success") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-6 py-20">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#021171]">
+          <svg
+            aria-label="Payment successful"
+            fill="none"
+            height="32"
+            role="img"
+            viewBox="0 0 24 24"
+            width="32"
+          >
+            <path
+              d="M5 13l4 4L19 7"
+              stroke="#F5F3EF"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2.5"
+            />
+          </svg>
+        </div>
+        <div className="text-center">
+          <h2 className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            Payment Successful!
+          </h2>
+          <p className="mt-2 font-new-sans text-[#A8A29E] text-sm">
+            Your buyback payment has been processed successfully.
+          </p>
+        </div>
+        <div className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-[#D6D3D1] bg-white p-6">
+          <div className="flex items-center gap-3 border-[#D6D3D1] border-b pb-4">
+            {assetPhoto ? (
+              <div className="h-12 w-12 overflow-hidden rounded-lg bg-[#EDE9E3]">
+                <Image
+                  alt={assetName}
+                  className="object-cover"
+                  height={48}
+                  src={assetPhoto}
+                  width={48}
+                />
+              </div>
+            ) : (
+              <div className="h-12 w-12 rounded-lg bg-[#EDE9E3]" />
+            )}
+            <div>
+              <p className="font-medium font-new-sans text-[#44403C] text-sm">
+                {assetName}
+              </p>
+              <p className="font-new-sans text-[#A8A29E] text-xs">
+                Model: {secondaryInfo}
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-between font-new-sans text-[#44403C] text-sm">
+            <span>Amount Paid</span>
+            <span className="font-medium">
+              {formatAmount(outstandingCents)}
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button
+            className="h-12 rounded-lg border border-[#A8A29E] px-6 font-medium font-new-sans text-[#44403C] text-base"
+            onClick={() => router.push(APP_ROUTES.BUYBACKS.DETAIL(buybackId))}
+            variant="outline"
+          >
+            View Buyback
+          </Button>
+          <Button
+            className="h-12 rounded-lg bg-[#021171] px-6 font-medium font-new-sans text-[#F5F3EF] text-base"
+            onClick={() => router.push(APP_ROUTES.APP.MY_DEALS)}
+          >
+            Back to My Deals
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "processing") {
+    return (
+      <UploadProgressScreen className="min-h-[60vh]" message="Processing your payment…" />
+    );
+  }
+
+  const isButtonDisabled =
+    isProcessing ||
+    tab === "crypto" ||
+    (selectedMethod.type === "stripe-new" && !cardholderName) ||
+    !acceptTerms;
+
+  return (
+    <div className="flex flex-col gap-6 lg:flex-row lg:gap-10">
+      {/* Left: Payment method selector */}
+      <div className="flex w-full max-w-[520px] flex-1 flex-col gap-6">
+        <div>
+          <h1 className="font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            Pay Buyback Price
+          </h1>
+          <p className="mt-1 font-new-sans text-[#A8A29E] text-sm">
+            Select a payment method
+          </p>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex w-fit gap-2 rounded-lg bg-[#EDE9E3] p-1">
+          <button
+            className={`rounded-md px-4 py-2 font-medium font-new-sans text-sm transition-colors ${
+              tab === "card"
+                ? "bg-[#021171] text-white"
+                : "text-[#44403C] hover:bg-[#D6D3D1]"
+            }`}
+            onClick={() => setTab("card")}
+            type="button"
+          >
+            Pay with Credit/Debit Card
+          </button>
+          <button
+            className={`rounded-md px-4 py-2 font-medium font-new-sans text-sm transition-colors ${
+              tab === "crypto"
+                ? "bg-[#021171] text-white"
+                : "text-[#44403C] hover:bg-[#D6D3D1]"
+            }`}
+            onClick={() => setTab("crypto")}
+            type="button"
+          >
+            Pay with Crypto
+          </button>
+        </div>
+
+        {tab === "crypto" && (
+          <CryptoPaymentSection
+            amountCents={shortfallCents > 0 ? shortfallCents : outstandingCents}
+            cryptoPhase={cryptoPhase}
+            onExpired={handleCryptoExpired}
+            onGenerate={handleGenerateCryptoPayment}
+            onRetry={handleCryptoRetry}
+            outstandingCents={outstandingCents}
+            walletBalanceCents={walletBalance}
+          />
+        )}
+
+        {tab === "card" && (
+          <div className="flex flex-col gap-4">
+            {/* Saved PayPal methods */}
+            {paypalMethods?.map((method) => (
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors ${
+                  selectedMethod.type === "paypal-saved" &&
+                  selectedMethod.id === method.id
+                    ? "border-[#021171] bg-[#F0F2FF]"
+                    : "border-[#D6D3D1] bg-white hover:bg-[#F5F3EF]"
+                }`}
+                key={method.id}
+              >
+                <input
+                  checked={
+                    selectedMethod.type === "paypal-saved" &&
+                    selectedMethod.id === method.id
+                  }
+                  className="sr-only"
+                  name="payment-method"
+                  onChange={() =>
+                    setSelectedMethod({
+                      type: "paypal-saved",
+                      id: method.id,
+                      email: method.email,
+                    })
+                  }
+                  type="radio"
+                />
+                <RadioDot
+                  checked={
+                    selectedMethod.type === "paypal-saved" &&
+                    selectedMethod.id === method.id
+                  }
+                />
+                <span className="font-medium font-new-sans text-[#44403C] text-sm">
+                  Pay with PayPal
+                </span>
+                <span className="ml-auto font-new-sans text-[#A8A29E] text-xs">
+                  {method.email}
+                </span>
+              </label>
+            ))}
+
+            {/* Saved Stripe cards */}
+            {stripeMethods?.map((method) => (
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors ${
+                  selectedMethod.type === "stripe-saved" &&
+                  selectedMethod.id === method.id
+                    ? "border-[#021171] bg-[#F0F2FF]"
+                    : "border-[#D6D3D1] bg-white hover:bg-[#F5F3EF]"
+                }`}
+                key={method.id}
+              >
+                <input
+                  checked={
+                    selectedMethod.type === "stripe-saved" &&
+                    selectedMethod.id === method.id
+                  }
+                  className="sr-only"
+                  name="payment-method"
+                  onChange={() =>
+                    setSelectedMethod({
+                      type: "stripe-saved",
+                      id: method.id,
+                      last4: method.last4,
+                      brand: method.brand,
+                    })
+                  }
+                  type="radio"
+                />
+                <RadioDot
+                  checked={
+                    selectedMethod.type === "stripe-saved" &&
+                    selectedMethod.id === method.id
+                  }
+                />
+                <span className="font-new-sans text-[#44403C] text-sm">
+                  {method.brand
+                    ? `${method.brand.toUpperCase()} **** **** **** ${method.last4}`
+                    : `**** **** **** ${method.last4}`}
+                </span>
+              </label>
+            ))}
+
+            {/* New card option */}
+            <label
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors ${
+                selectedMethod.type === "stripe-new"
+                  ? "border-[#021171] bg-[#F0F2FF]"
+                  : "border-[#D6D3D1] bg-white hover:bg-[#F5F3EF]"
+              }`}
+            >
+              <input
+                checked={selectedMethod.type === "stripe-new"}
+                className="sr-only"
+                name="payment-method"
+                onChange={() => setSelectedMethod({ type: "stripe-new" })}
+                type="radio"
+              />
+              <RadioDot checked={selectedMethod.type === "stripe-new"} />
+              <span className="font-medium font-new-sans text-[#44403C] text-sm">
+                New Debit/Credit Card
+              </span>
+            </label>
+
+            {/* Card details form */}
+            {selectedMethod.type === "stripe-new" && (
+              <div className="flex flex-col gap-5 rounded-2xl border border-[#D6D3D1] bg-white p-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium font-new-sans text-[#44403C] text-base">
+                    Card Details
+                  </h3>
+                  <div className="flex gap-1.5">
+                    {["VISA", "MC", "AMEX", "DC"].map((brand) => (
+                      <span
+                        className="rounded bg-[#EDE9E3] px-1.5 py-0.5 font-medium font-new-sans text-[#A8A29E] text-[10px]"
+                        key={brand}
+                      >
+                        {brand}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+                    Name on Card<span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    {...register("cardholderName")}
+                    className="h-12 rounded-[4px] border border-[#A8A29E] bg-white px-3 font-new-sans text-[#44403C] text-sm placeholder:text-[#A8A29E]"
+                    placeholder="John Doe"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+                    Card Number<span className="text-red-500">*</span>
+                  </Label>
+                  <div className="flex h-12 items-center rounded-[4px] border border-[#A8A29E] bg-white px-3">
+                    <CardNumberElement
+                      className="w-full"
+                      onChange={(event) => {
+                        setCardError(event.error?.message ?? null);
+                      }}
+                      options={STRIPE_ELEMENT_STYLE}
+                    />
+                  </div>
+                  <p className="font-new-sans text-[#A8A29E] text-xs">
+                    Enter your 16-digit number
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2 flex flex-col gap-2">
+                    <Label className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+                      Expiry Date<span className="text-red-500">*</span>
+                    </Label>
+                    <div className="flex h-12 items-center rounded-[4px] border border-[#A8A29E] bg-white px-3">
+                      <CardExpiryElement
+                        className="w-full"
+                        options={STRIPE_ELEMENT_STYLE}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="font-new-sans font-normal text-[#44403C] text-sm leading-[130%]">
+                      CVV<span className="text-red-500">*</span>
+                    </Label>
+                    <div className="flex h-12 items-center rounded-[4px] border border-[#A8A29E] bg-white px-3">
+                      <CardCvcElement
+                        className="w-full"
+                        options={STRIPE_ELEMENT_STYLE}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {cardError && (
+                  <p className="font-new-sans text-red-500 text-xs">
+                    {cardError}
+                  </p>
+                )}
+
+                {/* Save card toggle */}
+                <div className="flex items-center justify-between rounded-xl border border-[#D6D3D1] p-4">
+                  <span className="font-new-sans text-[#44403C] text-sm">
+                    Save this card for later
+                  </span>
+                  <button
+                    aria-checked={saveCard}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                      saveCard ? "bg-[#001A8C]" : "bg-[#D6D3D1]"
+                    }`}
+                    onClick={() => setValue("saveCard", !saveCard)}
+                    role="switch"
+                    type="button"
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                        saveCard ? "translate-x-5" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Terms of Use */}
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#D6D3D1] bg-white p-4">
+              <input
+                type="checkbox"
+                {...register("acceptTerms")}
+                className="h-4 w-4 rounded border-[#A8A29E] accent-[#021171]"
+              />
+              <span className="font-new-sans text-[#44403C] text-sm">
+                I have read and accept{" "}
+                <a
+                  className="text-[#021171] underline"
+                  href="/terms"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  LuxFlow Terms of Use
+                </a>
+                .
+              </span>
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* Right: Transaction details */}
+      <div className="w-full lg:w-[340px] lg:flex-shrink-0">
+        <div className="w-[520px] max-w-full rounded-2xl border border-[#D6D3D1] bg-white p-6">
+          <h2 className="font-new-sans font-semibold text-[#44403C] text-base">
+            Transaction Details
+          </h2>
+
+          <div className="mt-4 flex items-center gap-3 border-[#D6D3D1] border-b pb-4">
+            {assetPhoto ? (
+              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-[#EDE9E3]">
+                <Image
+                  alt={assetName}
+                  className="h-full w-full object-cover"
+                  height={56}
+                  src={assetPhoto}
+                  width={56}
+                />
+              </div>
+            ) : (
+              <div className="h-14 w-14 flex-shrink-0 rounded-lg bg-[#EDE9E3]" />
+            )}
+            <div>
+              <p className="font-medium font-new-sans text-[#44403C] text-sm">
+                {assetName}
+              </p>
+              {secondaryInfo && (
+                <p className="font-new-sans text-[#A8A29E] text-xs">
+                  {secondaryInfo}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="flex justify-between font-new-sans text-[#A8A29E] text-xs">
+              <span>Offer type</span>
+              <span className="text-[#44403C]">Sale with Buyback</span>
+            </div>
+
+            {buyback.computedDetails && (
+              <div className="flex flex-col gap-2 border-[#D6D3D1] border-t pt-3">
+                <div className="flex justify-between font-new-sans text-[#44403C] text-sm">
+                  <span>Buyback Amount</span>
+                  <span className="font-medium">
+                    {formatAmount(buyback.computedDetails.receivedAmountCents)}
+                  </span>
+                </div>
+
+                {buyback.computedDetails.serviceFeeCents > 0 && (
+                  <div className="flex justify-between font-new-sans text-[#44403C] text-sm">
+                    <span>Service Fee</span>
+                    <span>
+                      {formatAmount(buyback.computedDetails.serviceFeeCents)}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-between border-[#D6D3D1] border-t pt-2 font-new-sans font-semibold text-[#44403C] text-base">
+                  <span>Total</span>
+                  <span>{formatAmount(outstandingCents)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {tab === "crypto" ? (
+            <p className="mt-6 text-center font-new-sans text-[#A8A29E] text-xs">
+              Payment will complete automatically once your crypto transfer is
+              confirmed on the blockchain.
+            </p>
+          ) : (
+            <Button
+              className="mt-6 h-12 w-full rounded-lg bg-[#021171] font-medium font-new-sans text-[#F5F3EF] text-base disabled:opacity-50"
+              disabled={isButtonDisabled}
+              loading={isProcessing}
+              onClick={handleCompletePayment}
+              type="button"
+            >
+              Complete Payment
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CryptoCtaButton({
+  phase,
+  isActive,
+  selectedCurrency,
+  onGenerate,
+  onRetry,
+}: {
+  phase: CryptoPhase["phase"];
+  isActive: boolean;
+  selectedCurrency: string;
+  onGenerate: (currency: string) => void;
+  onRetry: () => void;
+}) {
+  if (phase === "failed") {
+    return (
+      <button
+        className="flex h-12 w-fit items-center justify-center self-center rounded-[4px] bg-[#021171] px-8 font-medium font-new-sans text-[#F5F3EF] text-base"
+        onClick={() => onGenerate(selectedCurrency)}
+        type="button"
+      >
+        Try Again
+      </button>
+    );
+  }
+  if (isActive) {
+    return (
+      <button
+        className="flex h-12 w-fit items-center justify-center self-center rounded-[4px] bg-[#021171] px-8 font-medium font-new-sans text-[#F5F3EF] text-base"
+        onClick={onRetry}
+        type="button"
+      >
+        Reset Payment Address
+      </button>
+    );
+  }
+  if (phase === "generating") {
+    return (
+      <div className="flex h-12 w-full items-center justify-center gap-2">
+        <svg
+          aria-hidden="true"
+          className="h-4 w-4 animate-spin text-[#021171]"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            fill="currentColor"
+          />
+        </svg>
+        <span className="font-new-sans text-[#44403C] text-sm">
+          Generating address…
+        </span>
+      </div>
+    );
+  }
+  return (
+    <button
+      className="flex h-12 w-fit items-center justify-center self-center rounded-[4px] bg-[#021171] px-8 font-medium font-new-sans text-[#F5F3EF] text-base"
+      onClick={() => onGenerate(selectedCurrency)}
+      type="button"
+    >
+      Generate Payment Address
+    </button>
+  );
+}
+
+const CRYPTO_CURRENCY_META: Record<
+  string,
+  { label: string; network: string; networkColor: string }
+> = {
+  usdttrc20: { label: "USDT", network: "TRC20", networkColor: "#C63127" },
+  usdc: { label: "USDC", network: "ETH", networkColor: "#627EEA" },
+  usdterc20: { label: "USDT", network: "ETH", networkColor: "#627EEA" },
+  usdtsol: { label: "USDT", network: "SOL", networkColor: "#0D0D0D" },
+  usdcsol: { label: "USDC", network: "SOL", networkColor: "#0D0D0D" },
+  usdtpol: { label: "USDT", network: "POL", networkColor: "#8247E5" },
+  usdcpol: { label: "USDC", network: "POL", networkColor: "#8247E5" },
+  usdtarb: { label: "USDT", network: "ARB", networkColor: "#2D374B" },
+  usdcarb: { label: "USDC", network: "ARB", networkColor: "#2D374B" },
+  usdtop: { label: "USDT", network: "OP", networkColor: "#FF0420" },
+  usdcop: { label: "USDC", network: "OP", networkColor: "#FF0420" },
+  usdtbase: { label: "USDT", network: "BASE", networkColor: "#0052FF" },
+  usdcbase: { label: "USDC", network: "BASE", networkColor: "#0052FF" },
+};
+
+function getCurrencyMeta(code: string) {
+  const meta = CRYPTO_CURRENCY_META[code.toLowerCase()];
+  if (meta) return meta;
+  // Fallback for unknown currencies
+  const upper = code.toUpperCase();
+  return { label: upper, network: "", networkColor: "#627EEA" };
+}
+
+const SUPPORTED_NETWORKS = ["SOL", "ETH", "BASE", "POL", "OP", "ARB", "TRX"];
+
+const NETWORK_ICON_URLS: Record<string, string> = {
+  SOL: "https://icons.llamao.fi/icons/chains/rsz_solana.jpg",
+  ETH: "https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg",
+  BASE: "https://icons.llamao.fi/icons/chains/rsz_base.jpg",
+  POL: "https://icons.llamao.fi/icons/chains/rsz_polygon.jpg",
+  OP: "https://icons.llamao.fi/icons/chains/rsz_optimism.jpg",
+  ARB: "https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg",
+  TRX: "https://icons.llamao.fi/icons/chains/rsz_tron.jpg",
+};
+
+function NetworkIcon({
+  network,
+  size = 24,
+}: {
+  network: string;
+  size?: number;
+}) {
+  const url = NETWORK_ICON_URLS[network.toUpperCase()];
+  if (url) {
+    return (
+      <Image
+        alt={network}
+        className="flex-shrink-0 rounded-full"
+        height={size}
+        src={url}
+        style={{ width: size, height: size }}
+        unoptimized
+        width={size}
+      />
+    );
+  }
+  return (
+    <span
+      className="inline-flex flex-shrink-0 items-center justify-center rounded-full font-bold text-[9px] text-white"
+      style={{ width: size, height: size, background: "#627EEA" }}
+    >
+      {network.slice(0, 3).toUpperCase()}
+    </span>
+  );
+}
+
+interface CryptoPaymentSectionProps {
+  cryptoPhase: CryptoPhase;
+  amountCents: number;
+  outstandingCents: number;
+  walletBalanceCents: number;
+  onGenerate: (payCurrency: string) => void;
+  onRetry: () => void;
+  onExpired: () => void;
+}
+
+function CryptoPaymentSection({
+  cryptoPhase,
+  amountCents,
+  outstandingCents,
+  walletBalanceCents,
+  onGenerate,
+  onRetry,
+  onExpired,
+}: CryptoPaymentSectionProps) {
+  const { data: currenciesData } = useNowPaymentsCurrencies();
+  const { formatAmount } = useCurrencyFormatter();
+  const cryptoOptions = (
+    currenciesData?.currencies ?? ["usdttrc20", "usdc", "usdterc20"]
+  ).map((code) => ({ value: code, ...getCurrencyMeta(code) }));
+
+  const [selectedCurrency, setSelectedCurrency] = useState<string>("");
+  const [comboOpen, setComboOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [isExpired, setIsExpired] = useState(false);
+
+  // Set default selection once currencies are loaded
+  const firstCurrencyCode = cryptoOptions[0]?.value;
+  useEffect(() => {
+    if (firstCurrencyCode && !selectedCurrency) {
+      setSelectedCurrency(firstCurrencyCode);
+    }
+  }, [firstCurrencyCode, selectedCurrency]);
+
+  const isActive =
+    cryptoPhase.phase === "awaiting" || cryptoPhase.phase === "confirming";
+  const checkout = isActive ? cryptoPhase.checkout : null;
+
+  const selectedOption =
+    cryptoOptions.find((o) => o.value === selectedCurrency) ?? cryptoOptions[0];
+
+  // Post-checkout: show exact crypto amount. Pre-checkout: show fiat amount in user's currency.
+  const displayAmount = checkout
+    ? `${checkout.payAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 })} ${checkout.payCurrency.toUpperCase()}`
+    : formatAmount(amountCents);
+
+  // Sub-line: after checkout show the fiat reference price from NowPayments.
+  const walletShortfallCents =
+    walletBalanceCents >= outstandingCents ? 0 : outstandingCents - walletBalanceCents;
+  let displaySubAmount: string | null = null;
+  if (checkout) {
+    displaySubAmount = `${checkout.priceCurrency?.toUpperCase() ?? "USD"} ${checkout.priceAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  } else if (walletShortfallCents > 0) {
+    displaySubAmount = `Shortfall: ${formatAmount(walletShortfallCents)}`;
+  } else {
+    displaySubAmount = `Wallet balance: ${formatAmount(walletBalanceCents)}`;
+  }
+
+  useEffect(() => {
+    const expiryDate = checkout?.expirationEstimateDate;
+    if (!expiryDate) {
+      setTimeLeft(null);
+      setIsExpired(false);
+      return;
+    }
+
+    const update = () => {
+      const diff = new Date(expiryDate).getTime() - Date.now();
+      if (diff <= 0) {
+        setTimeLeft(null);
+        setIsExpired(true);
+        return;
+      }
+      const minutes = Math.floor(diff / 60_000);
+      const seconds = Math.floor((diff % 60_000) / 1000);
+      setTimeLeft(`${minutes}:${seconds.toString().padStart(2, "0")}`);
+    };
+
+    setIsExpired(false);
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [checkout?.expirationEstimateDate]);
+
+  useEffect(() => {
+    if (isExpired && isActive) {
+      onExpired();
+    }
+  }, [isExpired, isActive, onExpired]);
+
+  async function handleCopyAddress() {
+    if (!checkout?.payAddress) return;
+    await navigator.clipboard.writeText(checkout.payAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const networkName = checkout
+    ? getCurrencyMeta(checkout.payCurrency).network ||
+      checkout.payCurrency.toUpperCase()
+    : (selectedOption?.network ?? "");
+
+  return (
+    <div className="flex flex-col gap-5 rounded-2xl bg-[#EDE9E3] p-6">
+      {/* Header: "Make your payment with USDC or USDT" */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="whitespace-nowrap font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+          Make your payment with
+        </p>
+        <div className="flex items-center gap-1.5">
+          <Image
+            alt="USDC"
+            className="shrink-0 rounded-full"
+            height={24}
+            src="https://coin-images.coingecko.com/coins/images/6319/small/usdc.png"
+            style={{ width: 24, height: 24 }}
+            unoptimized
+            width={24}
+          />
+          <p className="whitespace-nowrap font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            USDC or
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Image
+            alt="USDT"
+            className="shrink-0 rounded-full"
+            height={24}
+            src="https://coin-images.coingecko.com/coins/images/325/small/tether.png"
+            style={{ width: 24, height: 24 }}
+            unoptimized
+            width={24}
+          />
+          <p className="whitespace-nowrap font-light font-new-serif text-2xl text-[#44403C] leading-[120%]">
+            USDT
+          </p>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="border-[#D6D3D1] border-t" />
+
+      {/* Description + network icons */}
+      <div className="flex flex-col gap-3">
+        <p className="font-new-sans text-[#44403C] text-sm leading-[150%] tracking-[-0.14px]">
+          Select your preferred crypto item to complete the buyback payment.
+          Currently supporting stablecoins in multiple networks.
+        </p>
+        <div className="flex">
+          {SUPPORTED_NETWORKS.map((net, idx) => (
+            <span
+              className="flex-shrink-0"
+              key={net}
+              style={{
+                marginLeft: idx === 0 ? 0 : -4,
+                zIndex: SUPPORTED_NETWORKS.length - idx,
+              }}
+            >
+              <NetworkIcon network={net} size={32} />
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Step 1 card */}
+      <div className="flex flex-col gap-5 rounded-lg border border-[#D6D3D1] bg-[#F5F3EF] p-4">
+        <p className="font-new-sans text-[#44403C] text-sm leading-[150%]">
+          <strong>Step 1:</strong> Choose item and generate payment address
+        </p>
+
+        {/* Asset dropdown (searchable combobox) */}
+        <div className="flex flex-col gap-1">
+          <label className="font-new-sans text-[#44403C] text-sm leading-[130%]">
+            Select Item
+          </label>
+          <Popover
+            onOpenChange={(open) => {
+              if (!isActive && cryptoPhase.phase !== "generating") {
+                setComboOpen(open);
+                if (!open) setSearch("");
+              }
+            }}
+            open={comboOpen && !isActive && cryptoPhase.phase !== "generating"}
+          >
+            <PopoverTrigger asChild>
+              <button
+                className="flex h-12 w-full items-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-3 font-new-sans text-[#44403C] text-sm disabled:opacity-50"
+                disabled={isActive || cryptoPhase.phase === "generating"}
+                type="button"
+              >
+                {selectedOption && (
+                  <NetworkIcon
+                    network={selectedOption.network || selectedOption.label}
+                    size={20}
+                  />
+                )}
+                <span className="flex-1 text-left">
+                  {selectedOption?.label ?? "Select…"}
+                </span>
+                {selectedOption?.network && (
+                  <span
+                    className="rounded-lg px-2 py-0.5 font-medium text-[#001A8C] text-xs"
+                    style={{ background: "#E2E8F0" }}
+                  >
+                    {selectedOption.network}
+                  </span>
+                )}
+                <svg
+                  aria-hidden="true"
+                  className="flex-shrink-0 text-[#A8A29E]"
+                  fill="none"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  width="16"
+                >
+                  <path
+                    d="M6 9l6 6 6-6"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-[var(--radix-popover-trigger-width)] border-[#D6D3D1] bg-[#F5F3EF] p-0"
+              sideOffset={4}
+            >
+              <div className="border-[#D6D3D1] border-b p-2">
+                <input
+                  autoFocus
+                  className="h-8 w-full rounded border border-[#A8A29E] bg-white px-2 font-new-sans text-[#44403C] text-sm outline-none placeholder:text-[#A8A29E]"
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search currency…"
+                  value={search}
+                />
+              </div>
+              <div className="max-h-52 overflow-y-auto p-1">
+                {cryptoOptions
+                  .filter((opt) =>
+                    `${opt.label} ${opt.network}`
+                      .toLowerCase()
+                      .includes(search.toLowerCase())
+                  )
+                  .map((opt) => (
+                    <button
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded px-3 py-2 font-new-sans text-[#44403C] text-sm hover:bg-[#EDE9E3]",
+                        opt.value === selectedCurrency && "bg-[#EDE9E3]"
+                      )}
+                      key={opt.value}
+                      onClick={() => {
+                        setSelectedCurrency(opt.value);
+                        setComboOpen(false);
+                        setSearch("");
+                      }}
+                      type="button"
+                    >
+                      <NetworkIcon
+                        network={opt.network || opt.label}
+                        size={20}
+                      />
+                      <span className="font-medium">{opt.label}</span>
+                      {opt.network && (
+                        <span
+                          className="ml-auto rounded-lg px-2 py-0.5 font-medium text-[#001A8C] text-xs"
+                          style={{ background: "#E2E8F0" }}
+                        >
+                          {opt.network}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                {cryptoOptions.filter((opt) =>
+                  `${opt.label} ${opt.network}`
+                    .toLowerCase()
+                    .includes(search.toLowerCase())
+                ).length === 0 && (
+                  <p className="py-3 text-center font-new-sans text-[#A8A29E] text-sm">
+                    No currencies found
+                  </p>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Amount display */}
+        <div className="flex flex-col items-center gap-1">
+          <span className="font-new-sans text-[#44403C] text-sm">
+            Buyback Amount
+          </span>
+          <span className="font-extralight font-new-serif text-5xl text-[#44403C] leading-[110%]">
+            {displayAmount}
+          </span>
+          {displaySubAmount && (
+            <span className="font-new-sans text-[#44403C] text-sm">
+              {displaySubAmount}
+            </span>
+          )}
+        </div>
+
+        {/* CTA button */}
+        <CryptoCtaButton
+          isActive={isActive}
+          onGenerate={onGenerate}
+          onRetry={onRetry}
+          phase={cryptoPhase.phase}
+          selectedCurrency={selectedCurrency}
+        />
+      </div>
+
+      {/* Step 2 card */}
+      <div className="flex flex-col overflow-hidden rounded-lg border border-[#D6D3D1] bg-[#F5F3EF]">
+        {isActive && checkout ? (
+          <div className="flex flex-col items-center gap-5 p-5">
+            {/* Timer badge */}
+            {timeLeft && (
+              <span
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium font-new-sans text-[#001A8C] text-xs"
+                style={{ background: "#E2E8F0" }}
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  width="14"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="9"
+                    stroke="#041AA9"
+                    strokeWidth="1.5"
+                  />
+                  <path
+                    d="M12 7v5l3 3"
+                    stroke="#041AA9"
+                    strokeLinecap="round"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+                Address Valid for{" "}
+                <span
+                  className={
+                    timeLeft.startsWith("0:") || timeLeft.startsWith("1:")
+                      ? "text-red-600"
+                      : ""
+                  }
+                >
+                  {timeLeft}
+                </span>
+              </span>
+            )}
+
+            {/* QR code */}
+            <div
+              className={`rounded-[4px] border border-[#D6D3D1] p-3 transition-opacity ${
+                cryptoPhase.phase === "confirming"
+                  ? "opacity-50"
+                  : "opacity-100"
+              }`}
+            >
+              <QRCode
+                bgColor="#F5F3EF"
+                fgColor="#000000"
+                size={176}
+                value={checkout.payAddress}
+              />
+            </div>
+
+            {/* Address */}
+            <div className="flex flex-col items-center gap-1 text-center">
+              <span className="font-new-sans text-[#44403C] text-base">
+                Wallet Address:
+              </span>
+              <span className="break-all font-new-sans text-[#44403C] text-base">
+                <span className="font-bold">
+                  {checkout.payAddress.slice(0, 6)}
+                </span>
+                {checkout.payAddress.slice(6, -4)}
+                <span className="font-bold">
+                  {checkout.payAddress.slice(-4)}
+                </span>
+              </span>
+            </div>
+
+            {/* Copy button */}
+            <button
+              className="flex h-12 items-center gap-2 rounded-[4px] border border-[#A8A29E] bg-[#F5F3EF] px-4 font-medium font-new-sans text-[#44403C] text-sm transition-colors hover:bg-[#EDE9E3]"
+              onClick={handleCopyAddress}
+              type="button"
+            >
+              {copied ? "Copied!" : "Copy Address to Clipboard"}
+              <svg height="16" viewBox="0 0 24 24" width="16">
+                <rect
+                  height="13"
+                  rx="2"
+                  stroke="#44403C"
+                  strokeWidth="1.5"
+                  width="13"
+                  x="9"
+                  y="9"
+                />
+                <path
+                  d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
+                  stroke="#44403C"
+                  strokeWidth="1.5"
+                />
+              </svg>
+            </button>
+
+            {/* Transaction status */}
+            <div className="w-full">
+              <TransactionStatusCard
+                phase={
+                  cryptoPhase.phase as "awaiting" | "confirming" | "failed"
+                }
+              />
+            </div>
+
+            {/* Instructions */}
+            <div className="w-full rounded-lg bg-[#EDE9E3] p-4">
+              <p className="mb-2 font-bold font-new-sans text-[#44403C] text-sm">
+                Instructions
+              </p>
+              <ol className="flex flex-col gap-1 font-new-sans text-[#44403C] text-sm leading-[150%]">
+                <li>
+                  1. Ensure your wallet network is set as{" "}
+                  <strong>{networkName}</strong>
+                </li>
+                <li>
+                  2. Scan the QR code or copy the address into your wallet
+                </li>
+                <li>
+                  3. Send exactly{" "}
+                  <strong>
+                    {checkout.payAmount} {checkout.payCurrency.toUpperCase()}
+                  </strong>
+                  . Different amounts will result in rejected transactions
+                </li>
+                <li>
+                  4. Once you make the payment on your wallet, wait in this
+                  screen for the transaction confirmation. When confirmed the
+                  payment will be processed.
+                </li>
+              </ol>
+            </div>
+
+            {/* Warning */}
+            <div
+              className="flex w-full gap-3 rounded-xl p-4"
+              style={{ background: "#FFEDD5" }}
+            >
+              <svg
+                aria-hidden="true"
+                className="mt-0.5 flex-shrink-0"
+                fill="none"
+                height="20"
+                viewBox="0 0 24 24"
+                width="20"
+              >
+                <path
+                  d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                  stroke="#9A3412"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.5"
+                />
+                <line
+                  stroke="#9A3412"
+                  strokeLinecap="round"
+                  strokeWidth="1.5"
+                  x1="12"
+                  x2="12"
+                  y1="9"
+                  y2="13"
+                />
+                <line
+                  stroke="#9A3412"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                  x1="12"
+                  x2="12.01"
+                  y1="17"
+                  y2="17"
+                />
+              </svg>
+              <div>
+                <p className="font-bold font-new-sans text-[#9A3412] text-sm leading-[150%]">
+                  Please double-check all details below before submitting
+                </p>
+                <p className="font-new-sans text-[#9A3412] text-sm leading-[150%]">
+                  Confirm the destination address and amount before sending
+                  tokens. Tokens sent to wrong address cannot be recovered.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : cryptoPhase.phase === "failed" ? (
+          <div className="p-4">
+            <TransactionStatusCard phase="failed" />
+          </div>
+        ) : (
+          /* Empty state */
+          <div className="flex flex-col items-center gap-3 px-8 py-8">
+            <QrCode className="h-5 w-5 text-[#A8A29E]" />
+            <p className="text-center font-new-sans text-[#A8A29E] text-base leading-[150%]">
+              Address and instructions will appear here once generated.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Powered by NOWPayments */}
+      <div className="flex items-center gap-1.5">
+        <span className="font-new-sans text-[#44403C] text-sm leading-[150%]">
+          Powered by
+        </span>
+        <span className="font-bold font-new-sans text-[#44403C] text-sm leading-[150%]">
+          NOWPayments
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TransactionStatusCard({
+  phase,
+}: {
+  phase: "awaiting" | "confirming" | "failed";
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg bg-[#EDE9E3] p-4">
+      <div className="flex items-center justify-between">
+        <span className="font-new-sans text-[#44403C] text-sm">
+          Transaction status
+        </span>
+
+        {phase === "awaiting" && (
+          <span
+            className="rounded-lg px-2 py-1 font-medium font-new-sans text-[#9A3412] text-xs"
+            style={{ background: "#FFEDD5" }}
+          >
+            Awaiting Payment
+          </span>
+        )}
+
+        {phase === "confirming" && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-[#D6D3D1] bg-[#F5F3EF] px-2 py-1">
+            <span className="font-new-sans text-[#44403C] text-xs">
+              Payment Detected: Processing
+            </span>
+            <svg
+              aria-hidden="true"
+              className="h-3.5 w-3.5 animate-spin text-[#44403C]"
+              fill="none"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                fill="currentColor"
+              />
+            </svg>
+          </div>
+        )}
+
+        {phase === "failed" && (
+          <div className="flex items-center gap-1">
+            <span className="font-medium font-new-sans text-red-600 text-xs">
+              Payment Rejected
+            </span>
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="14"
+              viewBox="0 0 24 24"
+              width="14"
+            >
+              <path
+                d="M6 6l12 12M6 18L18 6"
+                stroke="#dc2626"
+                strokeLinecap="round"
+                strokeWidth="2.5"
+              />
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {phase === "failed" && (
+        <div
+          className="flex gap-3 rounded-xl p-4"
+          style={{ background: "#FFEDD5" }}
+        >
+          <svg
+            aria-hidden="true"
+            className="mt-0.5 flex-shrink-0"
+            fill="none"
+            height="20"
+            viewBox="0 0 24 24"
+            width="20"
+          >
+            <path
+              d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+              stroke="#9A3412"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.5"
+            />
+            <line
+              stroke="#9A3412"
+              strokeLinecap="round"
+              strokeWidth="1.5"
+              x1="12"
+              x2="12"
+              y1="9"
+              y2="13"
+            />
+            <line
+              stroke="#9A3412"
+              strokeLinecap="round"
+              strokeWidth="2"
+              x1="12"
+              x2="12.01"
+              y1="17"
+              y2="17"
+            />
+          </svg>
+          <div>
+            <p className="font-bold font-new-sans text-[#9A3412] text-sm">
+              Your payment was not processed
+            </p>
+            <p className="mt-0.5 font-new-sans text-[#9A3412] text-sm">
+              Please confirm you are sending the right asset and amount, and try
+              again.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RadioDot({ checked }: { checked: boolean }) {
+  return (
+    <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#A8A29E]">
+      {checked && <div className="h-2.5 w-2.5 rounded-full bg-[#021171]" />}
+    </div>
+  );
+}
+
+interface BuybackPaymentPageProps {
+  buybackId: string;
+}
+
+export function BuybackPaymentPage({ buybackId }: BuybackPaymentPageProps) {
+  return (
+    <div className="flex flex-col gap-6">
+      <BackButton href={APP_ROUTES.BUYBACKS.DETAIL(buybackId)} label="Back" />
+
+      <Elements stripe={getStripe()}>
+        <BuybackPaymentForm buybackId={buybackId} />
+      </Elements>
+    </div>
+  );
+}

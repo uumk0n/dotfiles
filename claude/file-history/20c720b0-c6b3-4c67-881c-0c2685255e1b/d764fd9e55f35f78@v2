@@ -1,0 +1,149 @@
+import { AssetExtras, BuybackRequestStatus, BuybackStatus, BuybackType, TicketStatus } from '@/db';
+
+export enum NotificationType {
+  // Quote request submission
+  QuoteRequestSubmitted = 'QUOTE_REQUEST_SUBMITTED', // Email + WhatsApp to user
+  QuoteRequestAdminNotification = 'QUOTE_REQUEST_ADMIN_NOTIFICATION', // WhatsApp to admin
+
+  // Buyback requests (seller)
+  BuybackRequestMinorEvent = 'BUYBACK_REQUEST_MINOR_EVENT', // Both via email and in-app
+  BuybackRequestMajorEvent = 'BUYBACK_REQUEST_MAJOR_EVENT', // In-app only
+
+  // Buybacks (seller)
+  BuybackExtendedByAdmin = 'BUYBACK_EXTENDED_BY_ADMIN',
+  BuybackExtendReminder = 'BUYBACK_EXTEND_REMINDER',
+  BuybackDeadlineComingUp = 'BUYBACK_DEADLINE_COMING_UP',
+  BuybackUnsettled = 'BUYBACK_UNSETTLED',
+  BuybackOfferExpired = 'BUYBACK_OFFER_EXPIRED',
+  BuybackFinalExtensionApproved = 'BUYBACK_FINAL_EXTENSION_APPROVED',
+  BuybackFinalExtensionRejected = 'BUYBACK_FINAL_EXTENSION_REJECTED',
+
+  // KYC
+  KycReminder = 'KYC_REMINDER',
+  KycApproved = 'KYC_APPROVED',
+  KycRejected = 'KYC_REJECTED',
+
+  // Authenticator
+  AuthenticationRequest = 'AUTHENTICATION_REQUEST',
+
+  // Admin
+  BuybackRequestAdminMinorEvent = 'BUYBACK_REQUEST_ADMIN_MINOR_EVENT',
+  BuybackRequestAdminMajorEvent = 'BUYBACK_REQUEST_ADMIN_MAJOR_EVENT',
+  BuybackAdminMinorEvent = 'BUYBACK_ADMIN_MINOR_EVENT',
+  BuybackAdminMajorEvent = 'BUYBACK_ADMIN_MAJOR_EVENT',
+
+  // Ticket
+  TicketClosed = 'TICKET_CLOSED',
+}
+
+interface AssetData {
+  categoryName: string;
+}
+
+interface QuoteRequestAssetData {
+  categoryName: string;
+  brandName?: string;
+  modelName?: string;
+  referenceNumber?: string;
+  condition?: string;
+  extras?: AssetExtras;
+}
+
+interface QuoteRequestSubmittedData {
+  userLastName: string;
+  buybackType: BuybackType;
+  buybackRequestId: string;
+  asset: QuoteRequestAssetData;
+}
+
+interface QuoteRequestAdminNotificationData {
+  buybackType: BuybackType;
+  asset: QuoteRequestAssetData;
+}
+
+interface BuybackRequestNotificationData {
+  buybackRequestId: string;
+  asset: AssetData;
+  status: BuybackRequestStatus;
+}
+
+interface BuybackNotificationData {
+  buybackId: string;
+  asset: AssetData;
+  status: BuybackStatus;
+}
+
+interface BuybackPeriodEndNotificationData {
+  buybackId: string;
+  daysLeft: number;
+  asset: AssetData;
+}
+
+interface BuybackUnsettledNotificationData {
+  buybackId: string;
+  asset: AssetData;
+  dueDate: string | undefined;
+}
+
+interface KycNotificationData {
+  userFullName: string;
+}
+
+interface AuthenticationRequestNotificationData {
+  assetValuationId: string;
+  asset: AssetData;
+}
+
+interface TicketClosedNotificationData {
+  ticketId: string;
+  status: TicketStatus;
+}
+
+export type NotificationData<T extends NotificationType> =
+  // Quote request submission
+  T extends NotificationType.QuoteRequestSubmitted
+  ? QuoteRequestSubmittedData
+  : T extends NotificationType.QuoteRequestAdminNotification
+  ? QuoteRequestAdminNotificationData
+  : // Buyback requests (seller)
+  T extends NotificationType.BuybackRequestMajorEvent
+  ? BuybackRequestNotificationData
+  : T extends NotificationType.BuybackRequestMinorEvent
+  ? BuybackRequestNotificationData
+  : // Buybacks (seller)
+  T extends NotificationType.BuybackExtendReminder
+  ? BuybackPeriodEndNotificationData
+  : T extends NotificationType.BuybackDeadlineComingUp
+  ? BuybackPeriodEndNotificationData
+  : T extends NotificationType.BuybackUnsettled
+  ? BuybackUnsettledNotificationData
+  : T extends NotificationType.BuybackOfferExpired
+  ? BuybackNotificationData
+  : T extends NotificationType.BuybackExtendedByAdmin
+  ? BuybackNotificationData
+  : T extends NotificationType.BuybackFinalExtensionApproved
+  ? BuybackNotificationData
+  : T extends NotificationType.BuybackFinalExtensionRejected
+  ? BuybackNotificationData
+  : // Authenticator
+  T extends NotificationType.AuthenticationRequest
+  ? AuthenticationRequestNotificationData
+  : // KYC
+  T extends NotificationType.KycReminder
+  ? KycNotificationData
+  : T extends NotificationType.KycApproved
+  ? KycNotificationData
+  : T extends NotificationType.KycRejected
+  ? KycNotificationData
+  : // Admin notifications
+  T extends NotificationType.BuybackRequestAdminMinorEvent
+  ? BuybackRequestNotificationData
+  : T extends NotificationType.BuybackRequestAdminMajorEvent
+  ? BuybackRequestNotificationData
+  : T extends NotificationType.BuybackAdminMinorEvent
+  ? BuybackNotificationData
+  : T extends NotificationType.BuybackAdminMajorEvent
+  ? BuybackNotificationData
+  : T extends NotificationType.TicketClosed
+  ? TicketClosedNotificationData
+  : never;

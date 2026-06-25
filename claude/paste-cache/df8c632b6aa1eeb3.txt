@@ -1,6 +1,0 @@
-Please perform the following updates to this page:
-1. update the answer of the question "Is it secure to send my item via courier?": answer should read : "Yes. Where applicable, LuxFlow arranges insured pickup and secure transport through Brinks. Assets are insured while in transit and during approved storage. Alternatively, you could also opt for a self drop-off in our authorized locations."
-2. update the answer of the question "What is the difference between a Permanent Sale and Sale with Buyback?" to: A Permanent Sale has no option to repurchase. A Sale with Buyback allows you to sell your item and repurchase it within 30 calendar days by refunding the amount you received.
-3. update the answer of the question "Who pays for return shipping on a buyback?" to: When exercising the Right of Reversal, the return shipping cost is embedded in out fees.
-4. Process timeline: change the height of the rows to 44px, so the full table fits in a single fold. Updated design here.
-5. Change the layout of the page, so the content sits on the left, and the table of contents on the right. updated design here

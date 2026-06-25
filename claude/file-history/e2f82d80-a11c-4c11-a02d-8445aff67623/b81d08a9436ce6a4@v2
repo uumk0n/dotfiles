@@ -1,6 +1,0 @@
-/**
- * Custom validators for class-validator.
- */
-export { IsTronAddress } from './is-tron-address.validator';
-export { IsCryptoAddress } from './is-crypto-address.validator';
-export { IsMinDepositAmount } from './min-deposit-amount.validator';

@@ -1,9 +1,0 @@
-{
-  "id": "3",
-  "subject": "Get PR summary",
-  "description": "View the pull request and get a summary of the changes",
-  "activeForm": "Summarizing PR changes",
-  "status": "pending",
-  "blocks": [],
-  "blockedBy": []
-}

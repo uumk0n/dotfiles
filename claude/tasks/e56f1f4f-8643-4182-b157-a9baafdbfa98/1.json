@@ -1,9 +1,0 @@
-{
-  "id": "1",
-  "subject": "Check PR eligibility for code review",
-  "description": "Check if the PR is closed, draft, doesn't need review, or already has a review from Claude.",
-  "activeForm": "Checking PR eligibility",
-  "status": "completed",
-  "blocks": [],
-  "blockedBy": []
-}

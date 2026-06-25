@@ -1,9 +1,0 @@
-import { Module } from '@nestjs/common';
-
-import { FilesPublicApiModule } from './files';
-import { TicketsPublicApiModule } from './tickets';
-
-@Module({
-  imports: [TicketsPublicApiModule, FilesPublicApiModule],
-})
-export class PublicApiModule {}

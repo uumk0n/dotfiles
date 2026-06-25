@@ -1,4 +1,0 @@
-export * from './GeneralTemplate';
-export * from './OtpTemplate';
-export * from './InviteTemplate';
-export * from './QuoteRequestSubmittedTemplate';

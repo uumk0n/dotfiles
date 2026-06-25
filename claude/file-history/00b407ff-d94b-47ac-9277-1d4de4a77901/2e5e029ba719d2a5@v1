@@ -1,5 +1,0 @@
-import { PermanentSalePage } from "@/pages-layer/services/permanent-sale/ui/permanent-sale";
-
-export default function Page() {
-  return <PermanentSalePage />;
-}
